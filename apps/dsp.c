@@ -831,14 +831,12 @@ static void resampler_new_delta(struct dsp_config *dsp)
            resampling are desired, last_sample history should be maintained
            even when not resampling. */
         dsp->resample = NULL;
-        memset(dsp->data.resample_data.resample_buf[0], sizeof(dsp->data.resample_data.resample_buf[0]), 0);
-        memset(dsp->data.resample_data.resample_buf[1], sizeof(dsp->data.resample_data.resample_buf[1]), 0);
+        memset(dsp->data.resample_data.resample_buf, 0, sizeof(dsp->data.resample_data.resample_buf));
         dsp->data.resample_data.buf_fill = 0; /* fixme: initialize to 0 on startup */
         dsp->data.resample_data.current = FILTER_SIZE<<16; /* fixme: initialize on startup */
-    }
-    else if (dsp->frequency < NATIVE_FREQUENCY)
+    } else if (dsp->frequency < NATIVE_FREQUENCY) {
         dsp->resample = dsp_upsample;
-    else {
+    } else {
         dsp->resample = dsp_downsample;
         dsp->data.resample_data.sinc_inc = (uint32_t)
             NATIVE_FREQUENCY * 65536LL / dsp->frequency;
