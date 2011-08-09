@@ -397,6 +397,8 @@ apply_crossfeed:
  * int dsp_downsample(int count, struct dsp_data *data,
  *                    in32_t *src[], int32_t *dst[])
  */
+
+#ifdef DSP_HAVE_ASM_RESAMPLING
     .section    .text
     .global     dsp_downsample
 dsp_downsample:
@@ -512,6 +514,8 @@ dsp_upsample:
     add     sp, sp, #8              @ adjust stack for temp variables
     ldmpc   regs=r4-r11             @ ... and we're out
     .size       dsp_upsample, .-dsp_upsample
+
+#endif
 
 /****************************************************************************
  *  void dsp_apply_gain(int count, struct dsp_data *data, int32_t *buf[])
