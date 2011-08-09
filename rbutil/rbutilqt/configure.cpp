@@ -278,7 +278,7 @@ void Config::setUserSettings()
 
     // devices tab
     refreshMountpoint();
-    mountpoint = RbSettings::value(RbSettings::Mountpoint).toString();
+    mountpoint = QDir::toNativeSeparators(RbSettings::value(RbSettings::Mountpoint).toString());
     setMountpoint(mountpoint);
 
     // cache tab
@@ -426,7 +426,7 @@ void Config::updateTtsState(int index)
         ui.configTTSstatusimg->setPixmap(QPixmap(QString::fromUtf8(":/icons/dialog-error.png")));
         ui.testTTS->setEnabled(false);
     }
-    
+
     delete tts; /* Config objects are never deleted (in fact, they are leaked..), so we can't rely on QObject,
                    since that would delete the TTSBase instance on application exit*/
 }
@@ -587,7 +587,7 @@ void Config::refreshMountpoint()
     // unwanted item.
     ui.mountPoint->blockSignals(true);
     ui.mountPoint->clear();
-    QStringList mps = Autodetection::mountpoints();
+    QStringList mps = Utils::mountpoints();
     for(int i = 0; i < mps.size(); ++i) {
         // add mountpoint as user data so we can change the displayed string
         // later (to include volume label or similar)

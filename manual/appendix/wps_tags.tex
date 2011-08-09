@@ -269,7 +269,9 @@ Example: \config{\%?mp<Stop|Play|Pause|Ffwd|Rew|Rec|Rec pause|FM|FM pause>}
     \config{\%cs} & The current screen, 1-15, in the order:
                 Menus, WPS, Recording screen, FM Radio screen, Current Playlist screen,
                 Settings menus, File browser, Database, Plugins, Quickscreen,
-                Pitchscreen, Setting chooser\\
+                Pitchscreen, Setting chooser, Playlist Catalog Viewer, Plugin,
+                Conext Menu, System Info screen, Time and Date Screen,
+                Bookmarks\\
   \end{tagmap}
 The tag can also be used as the switch in a conditional tag. For players without
 some capabilities (e.g. having no FM radio) some values will be never yielded.
@@ -600,13 +602,11 @@ display cycling round the defined sublines. See
 \opt{touchscreen}{
   \section{Touchscreen Areas}
     \begin{tagmap}
-      \config{\%T(x,y,width,\tabnlindent{}height,action)}
+      \config{\%T(x,y,width,\tabnlindent{}height, action, [options])}
       & Invoke the action specified when the user presses in the defined
       touchscreen area.\\
     \end{tagmap}
-  If the action starts with \& then the area must be held and allows repeat presses (e.g. for seeking).
-  If the action starts with * then the area must be held but the press only triggers once
-      (e.g. for switching a setting on a long press).
+
   Possible actions are:
 
   \begin{description}
@@ -635,6 +635,15 @@ display cycling round the defined sublines. See
       \config{\%T(0,0, setting\_inc, volume)} increases the volume by one step).
     \item[setting\_dec] -- Decrement the subsequently specified setting (e.g
       \config{\%T(0,0, setting\_dec, volume)} decreases the volume by one step).
+  \end{description}
+  Any (or muliple) of the following options can be used after the action is specified
+  \subsection{Options}
+  \begin{description}
+    \item[repeat_press] -- This region will trigger mulitple times when held (i.e for seeking)
+    \item[long_press] -- This region will trigger once after it is held for a long press
+    \item[reverse_bar] -- Reverse the bars touch direction (i.e seek right to left)
+    \item[allow_while_locked] -- Allows the region to be pressable when the 
+        skin is locked by the lock touch action
   \end{description}
 
   \section{Last Touchscreen Press}

@@ -238,6 +238,7 @@ static int get_tag(int *tag)
         {"Ps", tag_virt_playtime_sec},
         {"title", tag_title},
         {"filename", tag_filename},
+        {"basename", tag_virt_basename},
         {"tracknum", tag_tracknumber},
         {"discnum", tag_discnumber},
         {"year", tag_year},
@@ -1074,9 +1075,9 @@ static bool show_search_progress(bool init, int count)
 static int format_str(struct tagcache_search *tcs, struct display_format *fmt,
                       char *buf, int buf_size)
 {
-    char fmtbuf[8];
+    char fmtbuf[20];
     bool read_format = false;
-    int fmtbuf_pos = 0;
+    unsigned fmtbuf_pos = 0;
     int parpos = 0;
     int buf_pos = 0;
     int i;
@@ -1095,51 +1096,72 @@ static int format_str(struct tagcache_search *tcs, struct display_format *fmt,
             }
         }
         
+        char formatchar = fmt->formatstr[i];
+
         if (read_format)
         {
-            fmtbuf[fmtbuf_pos++] = fmt->formatstr[i];
-            if (fmtbuf_pos >= buf_size)
+            fmtbuf[fmtbuf_pos++] = formatchar;
+            if (fmtbuf_pos >= sizeof fmtbuf)
             {
                 logf("format parse error");
                 return -2;
             }
-            
-            if (fmt->formatstr[i] == 's')
+
+            if (formatchar == 's' || formatchar == 'd')
             {
+                unsigned space_left = buf_size - buf_pos;
+                char tmpbuf[MAX_PATH];
+                char *result;
+
                 fmtbuf[fmtbuf_pos] = '\0';
                 read_format = false;
-                if (fmt->tags[parpos] == tcs->type)
+
+                switch (formatchar)
                 {
-                    snprintf(&buf[buf_pos], buf_size - buf_pos, fmtbuf, tcs->result);
-                }
-                else
-                {
-                    /* Need to fetch the tag data. */
-                    if (!tagcache_retrieve(tcs, tcs->idx_id, fmt->tags[parpos],
-                                           &buf[buf_pos], buf_size - buf_pos))
+                case 's':
+                    if (fmt->tags[parpos] == tcs->type)
                     {
-                        logf("retrieve failed");
-                        return -3;
+                        result = tcs->result;
                     }
+                    else
+                    {
+                        /* Need to fetch the tag data. */
+                        int tag = fmt->tags[parpos];
+
+                        if (!tagcache_retrieve(tcs, tcs->idx_id,
+                                               (tag == tag_virt_basename ?
+                                                tag_filename : tag),
+                                               tmpbuf, sizeof tmpbuf))
+                        {
+                            logf("retrieve failed");
+                            return -3;
+                        }
+
+                        if (tag == tag_virt_basename
+                            && (result = strrchr(tmpbuf, '/')) != NULL)
+                        {
+                            result++;
+                        }
+                        else
+                            result = tmpbuf;
+                    }
+                    buf_pos +=
+                        snprintf(&buf[buf_pos], space_left, fmtbuf, result);
+                    break;
+
+                case 'd':
+                    buf_pos +=
+                        snprintf(&buf[buf_pos], space_left, fmtbuf,
+                                 tagcache_get_numeric(tcs, fmt->tags[parpos]));
                 }
-                buf_pos += strlen(&buf[buf_pos]);
+
                 parpos++;
             }
-            else if (fmt->formatstr[i] == 'd')
-            {
-                fmtbuf[fmtbuf_pos] = '\0';
-                read_format = false;
-                snprintf(&buf[buf_pos], buf_size - buf_pos, fmtbuf,
-                         tagcache_get_numeric(tcs, fmt->tags[parpos]));
-                buf_pos += strlen(&buf[buf_pos]);
-                parpos++;
-            }
-            continue;
         }
+        else
+            buf[buf_pos++] = formatchar;
         
-        buf[buf_pos++] = fmt->formatstr[i];
-        
-        if (buf_pos - 1 >= buf_size)
+        if (buf_pos >= buf_size - 1)    /* need at least one more byte for \0 */
         {
             logf("buffer overflow");
             return -4;
@@ -1154,7 +1176,7 @@ static int format_str(struct tagcache_search *tcs, struct display_format *fmt,
 static int retrieve_entries(struct tree_context *c, int offset, bool init)
 {
     struct tagcache_search tcs;
-    struct tagentry *dptr = (struct tagentry *)c->dircache;
+    struct tagentry *dptr = c->cache.entries;
     struct display_format *fmt;
     int i;
     int namebufused = 0;
@@ -1254,6 +1276,7 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
             dptr->name = str(LANG_TAGNAVI_ALL_TRACKS);
             dptr++;
             current_entry_count++;
+            special_entry_count++;
         }
         if (offset <= 1)
         {
@@ -1262,11 +1285,11 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
             dptr->extraseek = -1;
             dptr++;
             current_entry_count++;
+            special_entry_count++;
         }
-        special_entry_count+=2;
+
+        total_count += 2;
     }
-    
-    total_count += special_entry_count;
     
     while (tagcache_get_next(&tcs))
     {
@@ -1306,35 +1329,41 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
         
         if (!tcs.ramresult || fmt)
         {
-            char buf[MAX_PATH];
+            dptr->name = &c->cache.name_buffer[namebufused];
             
             if (fmt)
             {
-                if (format_str(&tcs, fmt, buf, sizeof buf) < 0)
+                int ret = format_str(&tcs, fmt, dptr->name,
+                                     c->cache.name_buffer_size - namebufused);
+                if (ret == -4)          /* buffer full */
+                {
+                    logf("chunk mode #2: %d", current_entry_count);
+                    c->dirfull = true;
+                    sort = false;
+                    break ;
+                }
+                else if (ret < 0)
                 {
                     logf("format_str() failed");
                     tagcache_search_finish(&tcs);
                     return 0;
                 }
+                else
+                    namebufused += strlen(dptr->name)+1;
             }
-            
-            dptr->name = &c->name_buffer[namebufused];
-            if (fmt)
-                namebufused += strlen(buf)+1;
             else
-                namebufused += tcs.result_len;
-            
-            if (namebufused >= c->name_buffer_size)
             {
-                logf("chunk mode #2: %d", current_entry_count);
-                c->dirfull = true;
-                sort = false;
-                break ;
+                namebufused += tcs.result_len;
+                if (namebufused < c->cache.name_buffer_size)
+                    strcpy(dptr->name, tcs.result);
+                else
+                {
+                    logf("chunk mode #2a: %d", current_entry_count);
+                    c->dirfull = true;
+                    sort = false;
+                    break ;
+                }
             }
-            if (fmt)
-                strcpy(dptr->name, buf);
-            else
-                strcpy(dptr->name, tcs.result);
         }
         else
             dptr->name = tcs.result;
@@ -1342,7 +1371,7 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
         dptr++;
         current_entry_count++;
 
-        if (current_entry_count >= c->dircache_count)
+        if (current_entry_count >= c->cache.max_entries)
         {
             logf("chunk mode #3: %d", current_entry_count);
             c->dirfull = true;
@@ -1361,9 +1390,12 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
     }
     
     if (sort)
-        qsort(c->dircache + special_entry_count * c->dentry_size,
+    {
+        int entry_size = sizeof(struct tagentry);
+        qsort(c->cache.entries + special_entry_count * entry_size,
               current_entry_count - special_entry_count,
-              c->dentry_size, compare);
+              entry_size, compare);
+    }
     
     if (!init)
     {
@@ -1395,8 +1427,8 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
     
     if (strip)
     {
-        dptr = c->dircache;
-        for (i = 0; i < total_count; i++, dptr++)
+        dptr = c->cache.entries;
+        for (i = special_entry_count; i < current_entry_count; i++, dptr++)
         {
             int len = strlen(dptr->name);
             
@@ -1413,7 +1445,7 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
 
 static int load_root(struct tree_context *c)
 {
-    struct tagentry *dptr = (struct tagentry *)c->dircache;
+    struct tagentry *dptr = c->cache.entries;
     int i;
     
     tc = c;
@@ -1455,7 +1487,6 @@ int tagtree_load(struct tree_context* c)
     int count;
     int table = c->currtable;
     
-    c->dentry_size = sizeof(struct tagentry);
     c->dirsindir = 0;
 
     if (!table)
@@ -1849,7 +1880,7 @@ static int tagtree_play_folder(struct tree_context* c)
 
 struct tagentry* tagtree_get_entry(struct tree_context *c, int id)
 {
-    struct tagentry *entry = (struct tagentry *)c->dircache;
+    struct tagentry *entry = (struct tagentry *)c->cache.entries;
     int realid = id - current_offset;
     
     /* Load the next chunk if necessary. */

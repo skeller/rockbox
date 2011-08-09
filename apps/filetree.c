@@ -1,4 +1,4 @@
-/***************************************************************************
+ /***************************************************************************
  *             __________               __   ___.
  *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
  *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
@@ -43,6 +43,7 @@
 #include "filetree.h"
 #include "misc.h"
 #include "strnatcmp.h"
+#include "playlist_viewer.h"
 #ifdef HAVE_LCD_BITMAP
 #include "keyboard.h"
 #endif
@@ -59,13 +60,13 @@ int ft_build_playlist(struct tree_context* c, int start_index)
     int i;
     int start=start_index;
 
-    struct entry *dircache = c->dircache;
+    struct entry *entries = c->cache.entries;
 
     for(i = 0;i < c->filesindir;i++)
     {
-        if((dircache[i].attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO)
+        if((entries[i].attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO)
         {
-            if (playlist_add(dircache[i].name) < 0)
+            if (playlist_add(entries[i].name) < 0)
                 break;
         }
         else
@@ -121,12 +122,12 @@ bool ft_play_playlist(char* pathname, char* dirname, char* filename)
     return false;
 }
 
-/* walk a directory and check all dircache entries if a .talk file exists */
+/* walk a directory and check all entries if a .talk file exists */
 static void check_file_thumbnails(struct tree_context* c)
 {
     int i;
     struct dirent *entry;
-    struct entry* dircache = c->dircache;
+    struct entry* entries = c->cache.entries;
     DIR *dir;
 
     dir = opendir(c->currdir);
@@ -135,18 +136,18 @@ static void check_file_thumbnails(struct tree_context* c)
     /* mark all files as non talking, except the .talk ones */
     for (i=0; i < c->filesindir; i++)
     {
-        if (dircache[i].attr & ATTR_DIRECTORY)
+        if (entries[i].attr & ATTR_DIRECTORY)
             continue; /* we're not touching directories */
 
         if (strcasecmp(file_thumbnail_ext,
-            &dircache[i].name[strlen(dircache[i].name)
+            &entries[i].name[strlen(entries[i].name)
                               - strlen(file_thumbnail_ext)]))
         {   /* no .talk file */
-            dircache[i].attr &= ~FILE_ATTR_THUMBNAIL; /* clear */
+            entries[i].attr &= ~FILE_ATTR_THUMBNAIL; /* clear */
         }
         else
         {   /* .talk file, we later let them speak themselves */
-            dircache[i].attr |= FILE_ATTR_THUMBNAIL; /* set */
+            entries[i].attr |= FILE_ATTR_THUMBNAIL; /* set */
         }
     }
 
@@ -169,9 +170,9 @@ static void check_file_thumbnails(struct tree_context* c)
         /* search corresponding file in dir cache */
         for (i=0; i < c->filesindir; i++)
         {
-            if (!strcasecmp(dircache[i].name, (char *)entry->d_name))
+            if (!strcasecmp(entries[i].name, (char *)entry->d_name))
             {   /* match */
-                dircache[i].attr |= FILE_ATTR_THUMBNAIL; /* set the flag */
+                entries[i].attr |= FILE_ATTR_THUMBNAIL; /* set the flag */
                 break; /* exit search loop, because we found it */
             }
         }
@@ -264,7 +265,7 @@ static int compare(const void* p1, const void* p2)
     return 0; /* never reached */
 }
 
-/* load and sort directory into dircache. returns NULL on failure. */
+/* load and sort directory into the tree's cache. returns NULL on failure. */
 int ft_load(struct tree_context* c, const char* tempdir)
 {
     int files_in_dir = 0;
@@ -289,8 +290,8 @@ int ft_load(struct tree_context* c, const char* tempdir)
     while ((entry = readdir(dir))) {
         int len;
         struct dirinfo info;
-        struct entry* dptr =
-            (struct entry*)(c->dircache + files_in_dir * sizeof(struct entry));
+        struct entry* table = c->cache.entries;
+        struct entry* dptr = &table[files_in_dir];
         if (!entry)
             break;
 
@@ -359,8 +360,8 @@ int ft_load(struct tree_context* c, const char* tempdir)
             continue;
         }
 
-        if ((len > c->name_buffer_size - name_buffer_used - 1) ||
-            (files_in_dir >= c->dircache_count)) {
+        if ((len > c->cache.name_buffer_size - name_buffer_used - 1) ||
+            (files_in_dir >= c->cache.max_entries)) {
             /* Tell the world that we ran out of buffer space */
             c->dirfull = true;
             break;
@@ -368,7 +369,7 @@ int ft_load(struct tree_context* c, const char* tempdir)
 
         ++files_in_dir;
 
-        dptr->name = &c->name_buffer[name_buffer_used];
+        dptr->name = &c->cache.name_buffer[name_buffer_used];
         dptr->time_write =
             (long)info.wrtdate<<16 |
             (long)info.wrttime; /* in one # */
@@ -383,7 +384,7 @@ int ft_load(struct tree_context* c, const char* tempdir)
     closedir(dir);
 
     compare_sort_dir = c->sort_dir;
-    qsort(c->dircache, files_in_dir, sizeof(struct entry), compare);
+    qsort(c->cache.entries, files_in_dir, sizeof(struct entry), compare);
 
     /* If thumbnail talking is enabled, make an extra run to mark files with
        associated thumbnails, so we don't do unsuccessful spinups later. */
@@ -423,8 +424,8 @@ int ft_enter(struct tree_context* c)
 {
     int rc = GO_TO_PREVIOUS;
     char buf[MAX_PATH];
-    struct entry *dircache = c->dircache;
-    struct entry* file = &dircache[c->selected_item];
+    struct entry* table = c->cache.entries;
+    struct entry *file = &table[c->selected_item];
 
     if (c->currdir[1])
         snprintf(buf,sizeof(buf),"%s/%s",c->currdir, file->name);
@@ -445,13 +446,8 @@ int ft_enter(struct tree_context* c)
 
         switch ( file->attr & FILE_ATTR_MASK ) {
             case FILE_ATTR_M3U:
-                play = ft_play_playlist(buf, c->currdir, file->name);
-                
-                if (play)
-                {
-                    start_index = 0;
-                }
-
+                if (!bookmark_autoload(buf))
+                    playlist_viewer_ex(buf);
                 break;
 
             case FILE_ATTR_AUDIO:

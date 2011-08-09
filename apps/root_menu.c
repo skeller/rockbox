@@ -60,6 +60,7 @@
 #include "bookmark.h"
 #include "playlist.h"
 #include "playlist_viewer.h"
+#include "playlist_catalog.h"
 #include "menus/exported_menus.h"
 #ifdef HAVE_RTC_ALARM
 #include "rtc.h"
@@ -335,7 +336,21 @@ static int miscscrn(void * param)
             return GO_TO_ROOT;
     }
 }
-    
+
+
+static int playlist_view_catalog(void * param)
+{
+    /* kludge untill catalog_view_playlists() returns something useful */
+    int old_playstatus = audio_status();
+    (void)param;
+    push_current_activity(ACTIVITY_PLAYLISTBROWSER);
+    catalog_view_playlists();
+    pop_current_activity();
+    if (!old_playstatus && audio_status())
+        return GO_TO_WPS;
+    return GO_TO_PREVIOUS;
+}
+
 static int playlist_view(void * param)
 {
     (void)param;
@@ -397,9 +412,9 @@ static const struct root_items items[] = {
     
     [GO_TO_RECENTBMARKS] =  { load_bmarks, NULL, &bookmark_settings_menu }, 
     [GO_TO_BROWSEPLUGINS] = { miscscrn, &plugin_menu, NULL },
-    [GO_TO_PLAYLISTS_SCREEN] = { miscscrn, &playlist_options,
-                                                        &playlist_settings },
-    [GO_TO_PLAYLIST_VIEWER] = { playlist_view, NULL, NULL },
+    [GO_TO_PLAYLISTS_SCREEN] = { playlist_view_catalog, NULL,
+                                                        &playlist_options },
+    [GO_TO_PLAYLIST_VIEWER] = { playlist_view, NULL, &playlist_options },
     [GO_TO_SYSTEM_SCREEN] = { miscscrn, &info_menu, &system_menu },
     
 };
@@ -415,6 +430,10 @@ MENUITEM_RETURNVALUE(db_browser, ID2P(LANG_TAGCACHE), GO_TO_DBBROWSER,
 #endif
 MENUITEM_RETURNVALUE(rocks_browser, ID2P(LANG_PLUGINS), GO_TO_BROWSEPLUGINS, 
                         NULL, Icon_Plugin);
+
+MENUITEM_RETURNVALUE(playlist_browser, ID2P(LANG_CATALOG), GO_TO_PLAYLIST_VIEWER, 
+                        NULL, Icon_Playlist);
+
 static char *get_wps_item_name(int selected_item, void * data, char *buffer)
 {
     (void)selected_item; (void)data; (void)buffer;
@@ -437,7 +456,7 @@ MENUITEM_RETURNVALUE(menu_, ID2P(LANG_SETTINGS), GO_TO_MAINMENU,
 MENUITEM_RETURNVALUE(bookmarks, ID2P(LANG_BOOKMARK_MENU_RECENT_BOOKMARKS),
                         GO_TO_RECENTBMARKS,  item_callback, 
                         Icon_Bookmark);
-MENUITEM_RETURNVALUE(playlists, ID2P(LANG_PLAYLISTS), GO_TO_PLAYLISTS_SCREEN,
+MENUITEM_RETURNVALUE(playlists, ID2P(LANG_CATALOG), GO_TO_PLAYLISTS_SCREEN,
                      NULL, Icon_Playlist);
 MENUITEM_RETURNVALUE(system_menu_, ID2P(LANG_SYSTEM), GO_TO_SYSTEM_SCREEN,
                      NULL, Icon_System_menu);
@@ -533,6 +552,8 @@ static inline int load_screen(int screen)
         activity = ACTIVITY_PLUGINBROWSER;
     else if (screen == GO_TO_MAINMENU)
         activity = ACTIVITY_SETTINGS;
+    else if (screen == GO_TO_SYSTEM_SCREEN)
+        activity =  ACTIVITY_SYSTEMSCREEN;
 
     if (activity != ACTIVITY_UNKNOWN)
         push_current_activity(activity);
@@ -550,6 +571,8 @@ static inline int load_screen(int screen)
 static int load_context_screen(int selection)
 {
     const struct menu_item_ex *context_menu = NULL;
+    int retval = GO_TO_PREVIOUS;
+    push_current_activity(ACTIVITY_CONTEXTMENU);
     if ((root_menu__[selection]->flags&MENU_TYPE_MASK) == MT_RETURN_VALUE)
     {
         int item = root_menu__[selection]->value;
@@ -562,9 +585,9 @@ static int load_context_screen(int selection)
     }
     
     if (context_menu)
-        return do_menu(context_menu, NULL, NULL, false);
-    else
-        return GO_TO_PREVIOUS;
+        retval = do_menu(context_menu, NULL, NULL, false);
+    pop_current_activity();
+    return retval;
 }
 
 #ifdef HAVE_PICTUREFLOW_INTEGRATION

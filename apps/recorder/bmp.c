@@ -561,7 +561,7 @@ int read_bmp_fd(int fd,
         resize |= IMG_NORESIZE;
 #endif
 #ifdef HAVE_REMOTE_LCD
-        remote = 0;
+        remote = false;
 #endif
     }
 #elif !defined(PLUGIN)

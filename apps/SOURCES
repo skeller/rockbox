@@ -227,6 +227,12 @@ metadata/smaf.c
 metadata/au.c
 metadata/vox.c
 metadata/tta.c
+metadata/ay.c
+metadata/gbs.c
+metadata/hes.c
+metadata/sgc.c
+metadata/vgm.c
+metadata/kss.c
 #endif
 #ifdef HAVE_TAGCACHE
 tagcache.c
@@ -317,4 +323,6 @@ keymaps/keymap-mpio-hd300.c
 keymaps/keymap-android.c
 #elif CONFIG_KEYPAD == SDL_PAD
 keymaps/keymap-sdl.c
+#elif CONFIG_KEYPAD == SANSA_FUZEPLUS_PAD
+keymaps/keymap-fuzeplus.c
 #endif
