@@ -27,7 +27,6 @@
 /* Set the appropriate #defines based on CPU or whatever matters */
 #if defined(CPU_ARM)
 #define DSP_HAVE_ASM_APPLY_GAIN
-#define DSP_HAVE_ASM_RESAMPLING
 #define DSP_HAVE_ASM_CROSSFEED
 #define DSP_HAVE_ASM_SOUND_CHAN_MONO
 #define DSP_HAVE_ASM_SOUND_CHAN_CUSTOM
@@ -36,7 +35,6 @@
 #define DSP_HAVE_ASM_SAMPLE_OUTPUT_STEREO
 #elif defined (CPU_COLDFIRE)
 #define DSP_HAVE_ASM_APPLY_GAIN
-#define DSP_HAVE_ASM_RESAMPLING
 #define DSP_HAVE_ASM_CROSSFEED
 #define DSP_HAVE_ASM_SOUND_CHAN_MONO
 #define DSP_HAVE_ASM_SOUND_CHAN_CUSTOM
@@ -44,6 +42,10 @@
 #define DSP_HAVE_ASM_SAMPLE_OUTPUT_MONO
 #define DSP_HAVE_ASM_SAMPLE_OUTPUT_STEREO
 #endif /* CPU_COLDFIRE */
+
+#if (defined (CPU_ARM) || defined(CPU_COLDFIRE)) && !defined(DSP_USE_SINC_RESAMPLING)
+#define DSP_HAVE_ASM_RESAMPLING
+#endif
 
 /* Declare prototypes based upon what's #defined above */
 #ifdef DSP_HAVE_ASM_CROSSFEED

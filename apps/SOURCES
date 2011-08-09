@@ -170,6 +170,9 @@ codec_thread.c
 playback.c
 codecs.c
 dsp.c
+#ifdef DSP_USE_SINC_RESAMPLING
+sinc.c
+#endif
 #ifndef HAVE_HARDWARE_BEEP
 beep.c
 #endif
