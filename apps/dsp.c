@@ -658,108 +658,111 @@ static inline int32_t sinc_upsample(const int32_t *src, uint32_t current)
 {
     int32_t sinc_val;
     int32_t samp;
+    uint32_t current_int = current >> 16;
+    uint32_t current_frac = (current >> 8) & 0xff;
 
     /* todo: linear interpolation between sinc values (doubles the amount of MULs) */
-    sinc_val = sinc[14][(current>>8)&0xff];
-    samp = (src[(current>>16)-7]>>12)*sinc_val;
+    sinc_val = sinc[14][current_frac];
+    samp = (src[current_int-7]>>12)*sinc_val;
 
-    sinc_val = sinc[13][(current>>8)&0xff];
-    samp += (src[(current>>16)-6]>>12)*sinc_val;
+    sinc_val = sinc[13][current_frac];
+    samp += (src[current_int-6]>>12)*sinc_val;
 
-    sinc_val = sinc[12][(current>>8)&0xff];
-    samp += (src[(current>>16)-5]>>12)*sinc_val;
+    sinc_val = sinc[12][current_frac];
+    samp += (src[current_int-5]>>12)*sinc_val;
 
-    sinc_val = sinc[11][(current>>8)&0xff];
-    samp += (src[(current>>16)-4]>>12)*sinc_val;
+    sinc_val = sinc[11][current_frac];
+    samp += (src[current_int-4]>>12)*sinc_val;
 
-    sinc_val = sinc[10][(current>>8)&0xff];
-    samp += (src[(current>>16)-3]>>12)*sinc_val;
+    sinc_val = sinc[10][current_frac];
+    samp += (src[current_int-3]>>12)*sinc_val;
 
-    sinc_val = sinc[9][(current>>8)&0xff];
-    samp += (src[(current>>16)-2]>>12)*sinc_val;
+    sinc_val = sinc[9][current_frac];
+    samp += (src[current_int-2]>>12)*sinc_val;
 
-    sinc_val = sinc[8][(current>>8)&0xff];
-    samp += (src[(current>>16)-1]>>12)*sinc_val;
+    sinc_val = sinc[8][current_frac];
+    samp += (src[current_int-1]>>12)*sinc_val;
 
-    sinc_val = sinc[7][(current>>8)&0xff];
-    samp += (src[(current>>16)-0]>>12)*sinc_val;
+    sinc_val = sinc[7][current_frac];
+    samp += (src[current_int-0]>>12)*sinc_val;
 
-    sinc_val = sinc[6][(current>>8)&0xff];
-    samp += (src[(current>>16)+1]>>12)*sinc_val;
+    sinc_val = sinc[6][current_frac];
+    samp += (src[current_int+1]>>12)*sinc_val;
 
-    sinc_val = sinc[5][(current>>8)&0xff];
-    samp += (src[(current>>16)+2]>>12)*sinc_val;
+    sinc_val = sinc[5][current_frac];
+    samp += (src[current_int+2]>>12)*sinc_val;
 
-    sinc_val = sinc[4][(current>>8)&0xff];
-    samp += (src[(current>>16)+3]>>12)*sinc_val;
+    sinc_val = sinc[4][current_frac];
+    samp += (src[current_int+3]>>12)*sinc_val;
 
-    sinc_val = sinc[3][(current>>8)&0xff];
-    samp += (src[(current>>16)+4]>>12)*sinc_val;
+    sinc_val = sinc[3][current_frac];
+    samp += (src[current_int+4]>>12)*sinc_val;
 
-    sinc_val = sinc[2][(current>>8)&0xff];
-    samp += (src[(current>>16)+5]>>12)*sinc_val;
+    sinc_val = sinc[2][current_frac];
+    samp += (src[current_int+5]>>12)*sinc_val;
 
-    sinc_val = sinc[1][(current>>8)&0xff];
-    samp += (src[(current>>16)+6]>>12)*sinc_val;
+    sinc_val = sinc[1][current_frac];
+    samp += (src[current_int+6]>>12)*sinc_val;
 
-    sinc_val = sinc[0][(current>>8)&0xff];
-    samp += (src[(current>>16)+7]>>12)*sinc_val;
+    sinc_val = sinc[0][current_frac];
+    samp += (src[current_int+7]>>12)*sinc_val;
 
     return (samp >> 4);
 }
 
-static inline int32_t sinc_downsample(const int32_t *src, uint32_t current, uint32_t sinc_increment, int32_t sinc[15][256])
+static inline int32_t sinc_downsample(const int32_t *src, uint32_t current, uint32_t sinc_increment, int32_t sinc[16][256])
 {
     uint32_t sinc_current;
     int32_t samp;
+    uint32_t current_int = current >> 16;
 
     sinc_current = ((sinc_increment * (current & 0xffff))>>16) + ((uint32_t)7<<16);
     sinc_current -= sinc_increment * 7;
 
     /* todo: linear interpolation between sinc values */
-    samp = (src[(current>>16)+7]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp = (src[current_int+7]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)+6]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int+6]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)+5]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int+5]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)+4]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int+4]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)+3]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int+3]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)+2]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int+2]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)+1]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int+1]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
     samp += (src[current>>16]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-1]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-1]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-2]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-2]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-3]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-3]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-4]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-4]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-5]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-5]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-6]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-6]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     sinc_current += sinc_increment;
-    samp += (src[(current>>16)-7]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
+    samp += (src[current_int-7]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
 
     return (samp >> 4);
 }
