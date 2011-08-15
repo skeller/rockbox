@@ -85,11 +85,10 @@ struct resample_data
 {
     uint32_t increment;			    /* 00h */
     uint32_t current;			    /* 04h */
-    uint32_t sinc_inc;			    /* 08h */
-    uint32_t buf_fill;			    /* 0ch */
+    uint32_t buf_fill;			    /* 08h */
     int32_t sample_buf[2][FILTER_SIZE];
     int32_t resample_buf[2][FILTER_SIZE*2];
-    int32_t sinc[15][256];
+    int32_t sinc[256][8];
 };
 #else
 struct resample_data
@@ -654,120 +653,72 @@ static void sample_output_new_format(struct dsp_config *dsp)
 
 #ifdef DSP_USE_SINC_RESAMPLING
 
-static inline int32_t sinc_upsample(const int32_t *src, uint32_t current)
+static inline int32_t sinc_resample(const int32_t *src, uint32_t current,
+				    int32_t sinc[256][8])
 {
     int32_t sinc_val;
     int32_t samp;
     uint32_t current_int = current >> 16;
     uint32_t current_frac = (current >> 8) & 0xff;
+    uint32_t sinc_index;
 
-    /* todo: linear interpolation between sinc values (doubles the amount of MULs) */
-    sinc_val = sinc[14][current_frac];
+    // todo: linear interpolation between sinc values (doubles the amount of MULs)
+    sinc_val = sinc[current_frac][7];
     samp = (src[current_int-7]>>12)*sinc_val;
 
-    sinc_val = sinc[13][current_frac];
+    sinc_val = sinc[current_frac][6];
     samp += (src[current_int-6]>>12)*sinc_val;
 
-    sinc_val = sinc[12][current_frac];
+    sinc_val = sinc[current_frac][5];
     samp += (src[current_int-5]>>12)*sinc_val;
 
-    sinc_val = sinc[11][current_frac];
+    sinc_val = sinc[current_frac][4];
     samp += (src[current_int-4]>>12)*sinc_val;
 
-    sinc_val = sinc[10][current_frac];
+    sinc_val = sinc[current_frac][3];
     samp += (src[current_int-3]>>12)*sinc_val;
 
-    sinc_val = sinc[9][current_frac];
+    sinc_val = sinc[current_frac][2];
     samp += (src[current_int-2]>>12)*sinc_val;
 
-    sinc_val = sinc[8][current_frac];
+    sinc_val = sinc[current_frac][1];
     samp += (src[current_int-1]>>12)*sinc_val;
 
-    sinc_val = sinc[7][current_frac];
-    samp += (src[current_int-0]>>12)*sinc_val;
+    sinc_val = sinc[current_frac][0];
+    samp += (src[current_int]>>12)*sinc_val;
 
-    sinc_val = sinc[6][current_frac];
+    /* use the symmetry of sinc: */
+    current_frac = 256 - current_frac;
+    /* if current_frac was 0, we get 1.0 as index */
+    sinc_index = current_frac >> 8;
+    current_frac &= 0xff;
+
+    sinc_val = sinc[current_frac][sinc_index];
     samp += (src[current_int+1]>>12)*sinc_val;
 
-    sinc_val = sinc[5][current_frac];
+    sinc_val = sinc[current_frac][sinc_index+1];
     samp += (src[current_int+2]>>12)*sinc_val;
 
-    sinc_val = sinc[4][current_frac];
+    sinc_val = sinc[current_frac][sinc_index+2];
     samp += (src[current_int+3]>>12)*sinc_val;
 
-    sinc_val = sinc[3][current_frac];
+    sinc_val = sinc[current_frac][sinc_index+3];
     samp += (src[current_int+4]>>12)*sinc_val;
 
-    sinc_val = sinc[2][current_frac];
+    sinc_val = sinc[current_frac][sinc_index+4];
     samp += (src[current_int+5]>>12)*sinc_val;
 
-    sinc_val = sinc[1][current_frac];
+    sinc_val = sinc[current_frac][sinc_index+5];
     samp += (src[current_int+6]>>12)*sinc_val;
 
-    sinc_val = sinc[0][current_frac];
+    sinc_val = sinc[current_frac][sinc_index+6];
     samp += (src[current_int+7]>>12)*sinc_val;
 
     return (samp >> 4);
 }
 
-static inline int32_t sinc_downsample(const int32_t *src, uint32_t current, uint32_t sinc_increment, int32_t sinc[16][256])
-{
-    uint32_t sinc_current;
-    int32_t samp;
-    uint32_t current_int = current >> 16;
 
-    sinc_current = ((sinc_increment * (current & 0xffff))>>16) + ((uint32_t)7<<16);
-    sinc_current -= sinc_increment * 7;
-
-    /* todo: linear interpolation between sinc values */
-    samp = (src[current_int+7]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int+6]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int+5]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int+4]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int+3]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int+2]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int+1]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current>>16]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-1]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-2]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-3]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-4]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-5]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-6]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    sinc_current += sinc_increment;
-    samp += (src[current_int-7]>>12)*sinc[sinc_current>>16][(sinc_current>>8) & 0xff];
-
-    return (samp >> 4);
-}
-
-static int dsp_downsample(int count, struct dsp_data *data,
+static int dsp_resample(int count, struct dsp_data *data,
                           const int32_t *src[], int32_t *dst[])
 {
     uint32_t inc = data->resample_data.increment;
@@ -780,35 +731,7 @@ static int dsp_downsample(int count, struct dsp_data *data,
         d = dst[i];
 
         while((cur>>16) < (unsigned)count - FILTER_DELAY) {
-            int32_t sample = sinc_downsample(src[i], cur, data->resample_data.sinc_inc, data->resample_data.sinc);
-            // should never happen, but maybe because of rounding etc. it does:
-            if(sample > 32767<<12) sample = 32767<<12;
-            else if (sample < -32768<<12) sample = -32768<<12;
-            *d++ = sample;
-            cur += inc;
-        }
-    }
-
-    data->resample_data.current = cur;
-
-    return d - dst[data->num_channels-1];
-}
-
-
-static int dsp_upsample(int count, struct dsp_data *data,
-                        const int32_t *src[], int32_t *dst[])
-{
-    uint32_t inc = data->resample_data.increment;
-    uint32_t cur = data->resample_data.current;
-    int32_t *d = dst[0];
-    int i;
-
-    for(i = 0; i<data->num_channels; i++) {
-        cur = data->resample_data.current;
-        d = dst[i];
-
-        while((cur>>16) < (unsigned)count - FILTER_DELAY) {
-            int32_t sample = sinc_upsample(src[i], cur);
+            int32_t sample = sinc_resample(src[i], cur, data->resample_data.sinc);
             // should never happen, but maybe because of rounding etc. it does:
             if(sample > 32767<<12) sample = 32767<<12;
             else if (sample < -32768<<12) sample = -32768<<12;
@@ -834,23 +757,42 @@ static void resampler_new_delta(struct dsp_config *dsp)
            resampling are desired, last_sample history should be maintained
            even when not resampling. */
         dsp->resample = NULL;
-        memset(dsp->data.resample_data.resample_buf, 0, sizeof(dsp->data.resample_data.resample_buf));
-        dsp->data.resample_data.buf_fill = 0; /* fixme: initialize to 0 on startup */
+        dsp->data.resample_data.current = 0;
+        memset(dsp->data.resample_data.resample_buf[0], sizeof(dsp->data.resample_data.resample_buf[0]), 0);
+        memset(dsp->data.resample_data.resample_buf[1], sizeof(dsp->data.resample_data.resample_buf[1]), 0);
+        dsp->data.resample_data.buf_fill = 0; /* fixme: initialize to FILTER_DELAY on startup */
         dsp->data.resample_data.current = FILTER_SIZE<<16; /* fixme: initialize on startup */
-    } else if (dsp->frequency < NATIVE_FREQUENCY) {
-        dsp->resample = dsp_upsample;
+    }
+    else if (dsp->frequency < NATIVE_FREQUENCY) {
+        dsp->resample = dsp_resample;
+        memcpy(dsp->data.resample_data.sinc, sinc, sizeof(sinc));
     } else {
-        dsp->resample = dsp_downsample;
-        dsp->data.resample_data.sinc_inc = (uint32_t)
-            NATIVE_FREQUENCY * 65536LL / dsp->frequency;
+        uint32_t sinc_inc = (uint32_t)
+            NATIVE_FREQUENCY * 256LL / dsp->frequency;
+        uint32_t sinc_cur = 0;
+        dsp->resample = dsp_resample;
         /* we have to scale the sinc's amplitude by downsampling rate,
-         * which is the same as the sinc_increment */
-        for (i=0; i<15; i++) {
+         * which is the same as the sinc_increment
+         * we also have to stretch (widen) the sinc by sinc_inc */
+        for (i=0; i<8; i++) {
             for(k=0; k<256; k++) {
-            /* we need to reduce increment to 17.15, because sinc's max is 1.0
-             * and it is signed */
-            dsp->data.resample_data.sinc[i][k] =
-                (sinc[i][k] * (int32_t)(dsp->data.resample_data.sinc_inc>>1)) >> 15;
+                uint32_t sinc_cur_int = sinc_cur >> 16;
+                uint32_t sinc_cur_frac = (sinc_cur >> 8) & 0xff;
+                int32_t sinc_val;
+                int32_t sinc_successor;
+                /* linear interpolation between sinc values */
+                if(sinc_cur_frac == 255) sinc_successor = 0; /* sinc[0][x] is always 0, for x!= 0 */
+                else sinc_successor = sinc[sinc_cur_frac+1][sinc_cur_int];
+
+                sinc_val =  sinc_successor - sinc[sinc_cur_frac][sinc_cur_int];
+                sinc_val = (sinc_val * (int32_t)(sinc_cur & 0xff)) >> 8;
+                sinc_val += sinc[sinc_cur_frac][sinc_cur_int];
+                /* scaling of sinc */
+                /* we need to use scale as 17.15, because sinc's max is 1.0
+                 * and it is signed */
+                dsp->data.resample_data.sinc[k][i] =
+                    (sinc_val * (int32_t)(NATIVE_FREQUENCY * 32768LL / dsp->frequency)) >> 15;
+                sinc_cur += sinc_inc;
             }
         }
     }
