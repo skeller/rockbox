@@ -37,7 +37,7 @@ void Namco_init( struct Nes_Namco_Apu* this );
 void Namco_output( struct Nes_Namco_Apu* this, struct Blip_Buffer* );
 	
 void Namco_reset( struct Nes_Namco_Apu* this );
-void Namco_end_frame( struct Nes_Namco_Apu* this, blip_time_t ) ICODE_ATTR;
+void Namco_end_frame( struct Nes_Namco_Apu* this, blip_time_t );
 	
 static inline uint8_t* namco_access( struct Nes_Namco_Apu* this )
 {
@@ -47,7 +47,7 @@ static inline uint8_t* namco_access( struct Nes_Namco_Apu* this )
 	return &this->reg [addr];
 }
 
-static inline void Namco_volume( struct Nes_Namco_Apu* this, double v ) { Synth_volume( &this->synth, 0.10 / namco_osc_count * v / 15.0 ); }
+static inline void Namco_volume( struct Nes_Namco_Apu* this, int v ) { Synth_volume( &this->synth, v / 10 / namco_osc_count / 15 ); }
 
 // Write-only address register is at 0xF800
 static inline void Namco_write_addr( struct Nes_Namco_Apu* this, int v ) { this->addr_reg = v; }
@@ -61,7 +61,7 @@ static inline void Namco_osc_output( struct Nes_Namco_Apu* this, int i, struct B
 }
 
 // Read/write data register is at 0x4800
-void Namco_run_until( struct Nes_Namco_Apu* this, blip_time_t ) ICODE_ATTR;
+void Namco_run_until( struct Nes_Namco_Apu* this, blip_time_t );
 static inline void Namco_write_data( struct Nes_Namco_Apu* this, blip_time_t time, int data )
 {
 	Namco_run_until( this, time );

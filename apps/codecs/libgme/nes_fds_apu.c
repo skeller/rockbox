@@ -23,7 +23,7 @@ void Fds_init( struct Nes_Fds_Apu* this )
 		
 	this->lfo_tempo = lfo_base_tempo;
 	Fds_set_output( this, 0, NULL );
-	Fds_volume( this, 1.0 );
+	Fds_volume( this, (int)FP_ONE_VOLUME );
 	Fds_reset( this );
 }
 
@@ -42,7 +42,7 @@ void Fds_reset( struct Nes_Fds_Apu* this )
 	this->mod_pos       = 0;
 	this->mod_write_pos = 0;
 	
-	static byte const initial_regs [0x0B] ICONST_ATTR = {
+	static byte const initial_regs [0x0B] = {
 		0x80,       // disable envelope
 		0, 0, 0xC0, // disable wave and lfo
 		0x80,       // disable sweep
@@ -108,12 +108,12 @@ void Fds_write_( struct Nes_Fds_Apu* this, unsigned addr, int data )
 	}
 }
 
-void Fds_set_tempo( struct Nes_Fds_Apu* this, double t )
+void Fds_set_tempo( struct Nes_Fds_Apu* this, int t )
 {
 	this->lfo_tempo = lfo_base_tempo;
-	if ( t != 1.0 )
+	if ( t != (int)FP_ONE_TEMPO )
 	{
-		this->lfo_tempo = (int) ((double) lfo_base_tempo / t + 0.5);
+		this->lfo_tempo = (int) ((lfo_base_tempo * FP_ONE_TEMPO) / t);
 		if ( this->lfo_tempo <= 0 )
 			this->lfo_tempo = 1;
 	}

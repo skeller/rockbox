@@ -19,7 +19,7 @@ int const amp_range = 15;
 
 void Apu_init( struct Nes_Apu* this )
 {
-	this->tempo_ = 1.0;
+	this->tempo_ = (int)(FP_ONE_TEMPO);
 	this->dmc.apu = this;
 	this->dmc.prg_reader = NULL;
 	this->irq_notifier_ = NULL;
@@ -39,19 +39,18 @@ void Apu_init( struct Nes_Apu* this )
 	this->oscs [4] = &this->dmc.osc;
 	
 	Apu_output( this, NULL );
-	Apu_volume( this, 1.0 );
+	Apu_volume( this, (int)FP_ONE_VOLUME );
 	Apu_reset( this, false, 0 );
 }
 
-static double nonlinear_tnd_gain( void ) { return 0.75; }
-void Apu_enable_nonlinear( struct Nes_Apu* this, double v )
+void Apu_enable_nonlinear( struct Nes_Apu* this, int v )
 {
 	this->dmc.nonlinear = true;
-	Synth_volume( &this->square_synth, 1.3 * 0.25751258 / 0.742467605 * 0.25 / amp_range * v );
+	Synth_volume( &this->square_synth, (int)((long long)(1.3 * 0.25751258 / 0.742467605 * 0.25 * FP_ONE_VOLUME) / amp_range * v) );
 	
-	const double tnd = 0.48 / 202 * nonlinear_tnd_gain();
-	Synth_volume( &this->triangle.synth, 3.0 * tnd );
-	Synth_volume( &this->noise.synth, 2.0 * tnd );
+	const int tnd = (int)(0.48 / 202 * 0.75 * FP_ONE_VOLUME);
+	Synth_volume( &this->triangle.synth, 3 * tnd );
+	Synth_volume( &this->noise.synth, 2 * tnd );
 	Synth_volume( &this->dmc.synth, tnd );
 	
 	this->square1 .osc.last_amp = 0;
@@ -61,13 +60,13 @@ void Apu_enable_nonlinear( struct Nes_Apu* this, double v )
 	this->dmc     .osc.last_amp = 0;
 }
 
-void Apu_volume( struct Nes_Apu* this, double v )
+void Apu_volume( struct Nes_Apu* this, int v )
 {
 	this->dmc.nonlinear = false;
-	Synth_volume( &this->square_synth,  0.1128  / amp_range * v );
-	Synth_volume( &this->triangle.synth,0.12765 / amp_range * v );
-	Synth_volume( &this->noise.synth,   0.0741  / amp_range * v );
-	Synth_volume( &this->dmc.synth,     0.42545 / 127 * v );
+	Synth_volume( &this->square_synth,  (int)((long long)(0.1128 *FP_ONE_VOLUME) * v / amp_range / FP_ONE_VOLUME) );
+	Synth_volume( &this->triangle.synth,(int)((long long)(0.12765*FP_ONE_VOLUME) * v / amp_range / FP_ONE_VOLUME) );
+	Synth_volume( &this->noise.synth,   (int)((long long)(0.0741 *FP_ONE_VOLUME) * v / amp_range / FP_ONE_VOLUME) );
+	Synth_volume( &this->dmc.synth,     (int)((long long)(0.42545*FP_ONE_VOLUME) * v / 127       / FP_ONE_VOLUME) );
 }
 
 void Apu_output( struct Nes_Apu* this, struct Blip_Buffer* buffer )
@@ -77,12 +76,12 @@ void Apu_output( struct Nes_Apu* this, struct Blip_Buffer* buffer )
 		Apu_osc_output( this, i, buffer );
 }
 
-void Apu_set_tempo( struct Nes_Apu* this, double t )
+void Apu_set_tempo( struct Nes_Apu* this, int t )
 {
 	this->tempo_ = t;
 	this->frame_period = (this->dmc.pal_mode ? 8314 : 7458);
-	if ( t != 1.0 )
-		this->frame_period = (int) (this->frame_period / t) & ~1; // must be even
+	if ( t != (int)FP_ONE_TEMPO )
+		this->frame_period = (int) ((this->frame_period * FP_ONE_TEMPO) / t) & ~1; // must be even
 }
 
 void Apu_reset( struct Nes_Apu* this, bool pal_mode, int initial_dmc_dac )
@@ -146,7 +145,7 @@ void Apu_run_until( struct Nes_Apu* this, nes_time_t end_time )
 	}
 }
 
-void run_until_( struct Nes_Apu* this, nes_time_t end_time )
+static void run_until_( struct Nes_Apu* this, nes_time_t end_time )
 {
 	require( end_time >= this->last_time );
 	
@@ -273,7 +272,7 @@ void Apu_end_frame( struct Nes_Apu* this, nes_time_t end_time )
 
 // registers
 
-static const unsigned char length_table [0x20] ICONST_ATTR = {
+static const unsigned char length_table [0x20] = {
 	0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06,
 	0xA0, 0x08, 0x3C, 0x0A, 0x0E, 0x0C, 0x1A, 0x0E, 
 	0x0C, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16,

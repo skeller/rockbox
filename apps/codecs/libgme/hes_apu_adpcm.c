@@ -55,7 +55,7 @@ static short stepsize[49] = {
  876, 963,1060,1166,1282,1411,1552
 };
 
-static int Adpcm_decode( struct Hes_Apu_Adpcm* this,int code ) ICODE_ATTR;
+static int Adpcm_decode( struct Hes_Apu_Adpcm* this,int code );
 static int Adpcm_decode( struct Hes_Apu_Adpcm* this,int code )
 {
 	struct State* state = &this->state;
@@ -87,7 +87,7 @@ static int Adpcm_decode( struct Hes_Apu_Adpcm* this,int code )
 			state->ad_sample = 2047;
 	}
 
-	static int const steps [8] ICONST_ATTR = {
+	static int const steps [8] = {
 		-1, -1, -1, -1, 2, 4, 6, 8
 	};
 	state->ad_ref_index += steps [c];
@@ -99,7 +99,7 @@ static int Adpcm_decode( struct Hes_Apu_Adpcm* this,int code )
 	return state->ad_sample;
 }
 
-static void Adpcm_run_until( struct Hes_Apu_Adpcm* this, blip_time_t end_time ) ICODE_ATTR;
+static void Adpcm_run_until( struct Hes_Apu_Adpcm* this, blip_time_t end_time );
 static void Adpcm_run_until( struct Hes_Apu_Adpcm* this, blip_time_t end_time )
 {
 	struct State* state = &this->state;
@@ -107,7 +107,7 @@ static void Adpcm_run_until( struct Hes_Apu_Adpcm* this, blip_time_t end_time )
 	int fadetimer = state->fadetimer;
 	int fadecount = state->fadecount;
 	int last_time = this->last_time;
-	double next_timer = this->next_timer;
+	int next_timer = this->next_timer;
 	int last_amp = this->last_amp;
 	
 	struct Blip_Buffer* output = this->output; // cache often-used values
@@ -129,7 +129,7 @@ static void Adpcm_run_until( struct Hes_Apu_Adpcm* this, blip_time_t end_time )
 					volume = 0xFF - ( 0xFF * fadecount / fadetimer );
 				}
 			}
-			next_timer += 7159.091;
+			next_timer += 7159; // 7159091/1000;
 		}
 		int amp;
 		if ( state->ad_low_nibble )
@@ -160,7 +160,7 @@ static void Adpcm_run_until( struct Hes_Apu_Adpcm* this, blip_time_t end_time )
 
 	if ( !state->playflag )
 	{
-		while ( next_timer <= end_time ) next_timer += 7159.091;
+		while ( next_timer <= end_time ) next_timer += 7159; // 7159091/1000
 		last_time = end_time;
 	}
 	
@@ -290,7 +290,7 @@ void Adpcm_end_frame( struct Hes_Apu_Adpcm* this, blip_time_t end_time )
 {
 	Adpcm_run_until( this, end_time );
 	this->last_time -= end_time;
-	this->next_timer -= (double)end_time;
+	this->next_timer -= end_time;
 	check( last_time >= 0 );
 	if ( this->output )
 		Blip_set_modified( this->output );

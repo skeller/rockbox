@@ -97,8 +97,8 @@ struct Kss_Emu {
 	int max_initial_silence;
 	int voice_count;
 	int mute_mask_;
-	double tempo;
-	double gain;
+	int tempo;
+	int gain;
 	
 	long sample_rate;
 	
@@ -155,7 +155,7 @@ blargg_err_t Kss_start_track( struct Kss_Emu* this, int track );
 
 // Generate 'count' samples info 'buf'. Output is in stereo. Any emulation
 // errors set warning string, and major errors also end track.
-blargg_err_t Kss_play( struct Kss_Emu* this, long count, sample_t* buf ) ICODE_ATTR;
+blargg_err_t Kss_play( struct Kss_Emu* this, long count, sample_t* buf );
 
 // Track status/control
 
@@ -192,7 +192,7 @@ static inline long Track_get_length( struct Kss_Emu* this, int n )
 
 // Adjust song tempo, where 1.0 = normal, 0.5 = half speed, 2.0 = double speed.
 // Track length as returned by track_info() assumes a tempo of 1.0.
-void Sound_set_tempo( struct Kss_Emu* this, double t );
+void Sound_set_tempo( struct Kss_Emu* this, int t );
 
 // Mute/unmute voice i, where voice 0 is first voice
 void Sound_mute_voice( struct Kss_Emu* this, int index, bool mute );
@@ -203,20 +203,20 @@ void Sound_mute_voices( struct Kss_Emu* this, int mask );
 
 // Change overall output amplitude, where 1.0 results in minimal clamping.
 // Must be called before set_sample_rate().
-static inline void Sound_set_gain( struct Kss_Emu* this, double g )
+static inline void Sound_set_gain( struct Kss_Emu* this, int g )
 {
 	assert( !this->sample_rate ); // you must set gain before setting sample rate
 	this->gain = g;
 }
 
 // Emulation (You shouldn't touch these
-void cpu_write( struct Kss_Emu* this, kss_addr_t, int ) ICODE_ATTR;
-int  cpu_in( struct Kss_Emu* this, kss_time_t, kss_addr_t ) ICODE_ATTR;
-void cpu_out( struct Kss_Emu* this, kss_time_t, kss_addr_t, int ) ICODE_ATTR;
+void cpu_write( struct Kss_Emu* this, kss_addr_t, int );
+int  cpu_in( struct Kss_Emu* this, kss_time_t, kss_addr_t );
+void cpu_out( struct Kss_Emu* this, kss_time_t, kss_addr_t, int );
 
-void cpu_write_( struct Kss_Emu* this, kss_addr_t addr, int data ) ICODE_ATTR;
-bool run_cpu( struct Kss_Emu* this, kss_time_t end ) ICODE_ATTR;
-void jsr( struct Kss_Emu* this, byte const addr [] ) ICODE_ATTR;
+void cpu_write_( struct Kss_Emu* this, kss_addr_t addr, int data );
+bool run_cpu( struct Kss_Emu* this, kss_time_t end );
+void jsr( struct Kss_Emu* this, byte const addr [] );
 
 static inline int sms_psg_enabled( struct Kss_Emu* this )   { return this->chip_flags & sms_psg_flag;  }
 static inline int sms_fm_enabled( struct Kss_Emu* this )    { return this->chip_flags & sms_fm_flag;   }

@@ -222,7 +222,7 @@
     \nopt{clipv1,c200v2}{
     MSX Konami Sound System
         & \fname{.kss}
-        & Progress bar and seek use subtracks instead of seconds.\\
+        & Progress bar and seek use subtracks instead of seconds.\\}
     SMS/GG/CV Sound Format
         & \fname{.sgc}
         & Supports Sega Master System and Game Gear Sound Format. 
@@ -232,14 +232,13 @@
         & \\
     Gzipped Video Game Music Format
         & \fname{.vgz}
-        & \\}
+        & \\
     MOD
         & \fname{.mod} 
         & \\
-    \nopt{clipv1,c200v2}{
     NES Sound Format
         & \fname{.nsf}, \fname{.nsfe} 
-        & Progress bar and seek use subtracks instead of seconds.\\}
+        & Progress bar and seek use subtracks instead of seconds.\\
     Atari SAP
         & \fname{.sap} 
         & \\
@@ -250,6 +249,9 @@
         & \fname{.spc} 
         & \\
   \end{rbtabular}
+  
+  \note{NSF and VGM might not play in realtime on all devices due to CPU 
+  performance requirements.}
   
   \subsection{Codec featureset}
   \begin{rbtabular}{.95\textwidth}{lXXX}%

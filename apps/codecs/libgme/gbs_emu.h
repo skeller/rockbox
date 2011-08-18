@@ -63,8 +63,8 @@ struct Gbs_Emu {
 	long sample_rate_;
 	unsigned buf_changed_count;
 	int voice_count_;
-	double gain_;
-	double tempo_;
+	int gain_;
+	int tempo_;
 	
 	// track-specific
 	byte track_count;
@@ -126,7 +126,7 @@ blargg_err_t Gbs_start_track( struct Gbs_Emu* this, int );
 
 // Generate 'count' samples info 'buf'. Output is in stereo. Any emulation
 // errors set warning string, and major errors also end track.
-blargg_err_t Gbs_play( struct Gbs_Emu* this, long count, sample_t* buf ) ICODE_ATTR;
+blargg_err_t Gbs_play( struct Gbs_Emu* this, long count, sample_t* buf );
 
 // Track status/control
 // Number of milliseconds (1000 msec = 1 second) played since beginning of track
@@ -158,7 +158,7 @@ static inline long Track_get_length( struct Gbs_Emu* this, int n )
 // Sound customization
 // Adjust song tempo, where 1.0 = normal, 0.5 = half speed, 2.0 = double speed.
 // Track length as returned by track_info() assumes a tempo of 1.0.
-void Sound_set_tempo( struct Gbs_Emu* this, double );
+void Sound_set_tempo( struct Gbs_Emu* this, int );
 
 // Mute/unmute voice i, where voice 0 is first voice
 void Sound_mute_voice( struct Gbs_Emu* this, int index, bool mute );
@@ -169,7 +169,7 @@ void Sound_mute_voices( struct Gbs_Emu* this, int mask );
 
 // Change overall output amplitude, where 1.0 results in minimal clamping.
 // Must be called before set_sample_rate().
-static inline void Sound_set_gain( struct Gbs_Emu* this, double g )
+static inline void Sound_set_gain( struct Gbs_Emu* this, int g )
 {
 	assert( !this->sample_rate_ ); // you must set gain before setting sample rate
 	this->gain_ = g;
@@ -178,16 +178,16 @@ static inline void Sound_set_gain( struct Gbs_Emu* this, double g )
 
 // Emulation (You shouldn't touch these)
 
-blargg_err_t Run_clocks( struct Gbs_Emu* this, blip_time_t duration ) ICODE_ATTR;
-void Set_bank( struct Gbs_Emu* this, int ) ICODE_ATTR;
-void Update_timer( struct Gbs_Emu* this ) ICODE_ATTR;
+blargg_err_t Run_clocks( struct Gbs_Emu* this, blip_time_t duration );
+void Set_bank( struct Gbs_Emu* this, int );
+void Update_timer( struct Gbs_Emu* this );
 
 // Runs CPU until time becomes >= 0
-void Run_cpu( struct Gbs_Emu* this ) ICODE_ATTR;
+void Run_cpu( struct Gbs_Emu* this );
 
 // Reads/writes memory and I/O
-int  Read_mem( struct Gbs_Emu* this, addr_t addr ) ICODE_ATTR;
-void Write_mem( struct Gbs_Emu* this, addr_t addr, int data ) ICODE_ATTR;
+int  Read_mem( struct Gbs_Emu* this, addr_t addr );
+void Write_mem( struct Gbs_Emu* this, addr_t addr, int data );
 
 // Current time
 static inline blip_time_t Time( struct Gbs_Emu* this ) 
@@ -195,10 +195,10 @@ static inline blip_time_t Time( struct Gbs_Emu* this )
 	return Cpu_time( &this->cpu ) + this->end_time; 
 }
 
-void Jsr_then_stop( struct Gbs_Emu* this, byte const [] ) ICODE_ATTR;
-void Write_io_inline( struct Gbs_Emu* this, int offset, int data, int base ) ICODE_ATTR;
-void Write_io_( struct Gbs_Emu* this, int offset, int data ) ICODE_ATTR;
-int  Read_io(  struct Gbs_Emu* this, int offset ) ICODE_ATTR;
-void Write_io( struct Gbs_Emu* this, int offset, int data ) ICODE_ATTR;
+void Jsr_then_stop( struct Gbs_Emu* this, byte const [] );
+void Write_io_inline( struct Gbs_Emu* this, int offset, int data, int base );
+void Write_io_( struct Gbs_Emu* this, int offset, int data );
+int  Read_io(  struct Gbs_Emu* this, int offset );
+void Write_io( struct Gbs_Emu* this, int offset, int data );
 
 #endif

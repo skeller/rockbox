@@ -18,7 +18,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-const char gme_wrong_file_type [] ICONST_ATTR = "Wrong file type for this emulator";
+const char gme_wrong_file_type [] = "Wrong file type for this emulator";
 long const clock_divisor = 12;
 
 int const stereo = 2; // number of channels for stereo
@@ -31,7 +31,7 @@ int const fade_shift = 8; // fade ends with gain at 1.0 / (1 << fade_shift)
 int const initial_play_delay = 7; // KikiKaikai needed this to work
 int const rom_addr  = 0x8000;
 
-void clear_track_vars( struct Nsf_Emu* this )
+static void clear_track_vars( struct Nsf_Emu* this )
 {
 	this->current_track    = -1;
 	this->out_time         = 0;
@@ -54,8 +54,8 @@ void Nsf_init( struct Nsf_Emu* this )
 {
 	this->sample_rate = 0;
 	this->mute_mask_   = 0;
-	this->tempo        = 1.0;
-	this->gain         = 1.0;
+	this->tempo        = (int)(FP_ONE_TEMPO);
+	this->gain         = (int)(FP_ONE_GAIN);
 	
 	// defaults
 	this->max_initial_silence = 2;
@@ -63,7 +63,7 @@ void Nsf_init( struct Nsf_Emu* this )
 	this->voice_count = 0;
 	
 	// Set sound gain
-	Sound_set_gain( this, 1.2 );
+	Sound_set_gain( this, (int)(FP_ONE_GAIN*1.2) );
 	
 	// Unload
 	clear_track_vars( this );
@@ -82,14 +82,14 @@ void Nsf_init( struct Nsf_Emu* this )
 
 // Setup
 
-blargg_err_t init_sound( struct Nsf_Emu* this )
+static blargg_err_t init_sound( struct Nsf_Emu* this )
 {
 	/* if ( header_.chip_flags & ~(fds_flag | namco_flag | vrc6_flag | fme7_flag) )
 		warning( "Uses unsupported audio expansion hardware" ); **/
 	
 	this->voice_count = apu_osc_count;
 	
-	double adjusted_gain = 1.0 / 0.75 * this->gain;
+	int adjusted_gain = (this->gain * 4) / 3;
 	
 	#ifdef NSF_EMU_APU_ONLY
 	{
@@ -101,7 +101,7 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 		if ( vrc6_enabled( this ) )
 		{
 			Vrc6_init( &this->vrc6 );
-			adjusted_gain *= 0.75;
+			adjusted_gain = (adjusted_gain*3) / 4;
 			
 			this->voice_count += vrc6_osc_count;
 		}
@@ -109,7 +109,7 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 		if ( fme7_enabled( this ) )
 		{
 			Fme7_init( &this->fme7 );
-			adjusted_gain *= 0.75;
+			adjusted_gain = (adjusted_gain*3) / 4;
 			
 			this->voice_count += fme7_osc_count;
 		}
@@ -117,7 +117,7 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 		if ( mmc5_enabled( this ) )
 		{
 			Mmc5_init( &this->mmc5 );
-			adjusted_gain *= 0.75;
+			adjusted_gain = (adjusted_gain*3) / 4;
 			
 			this->voice_count += mmc5_osc_count;
 		}
@@ -125,7 +125,7 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 		if ( fds_enabled( this ) )
 		{
 			Fds_init( &this->fds );
-			adjusted_gain *= 0.75;
+			adjusted_gain = (adjusted_gain*3) / 4;
 			
 			this->voice_count += fds_osc_count ;
 		}
@@ -133,7 +133,7 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 		if ( namco_enabled( this ) )
 		{
 			Namco_init( &this->namco );
-			adjusted_gain *= 0.75;
+			adjusted_gain = (adjusted_gain*3) / 4;
 			
 			this->voice_count += namco_osc_count;
 		}
@@ -145,17 +145,17 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 				Vrc7_set_rate( &this->vrc7, this->sample_rate );
 			#endif
 
-			adjusted_gain *= 0.75;
+			adjusted_gain = (adjusted_gain*3) / 4;
 			
 			this->voice_count += vrc7_osc_count;
 		}
 		
-		if ( vrc7_enabled( this )  ) Vrc7_volume( &this->vrc7, adjusted_gain );
-		if ( namco_enabled( this ) ) Namco_volume( &this->namco, adjusted_gain );
-		if ( vrc6_enabled( this )  ) Vrc6_volume( &this->vrc6, adjusted_gain );
-		if ( fme7_enabled( this )  ) Fme7_volume( &this->fme7, adjusted_gain );
+		if ( vrc7_enabled( this )  ) Vrc7_volume( &this->vrc7,    adjusted_gain );
+		if ( namco_enabled( this ) ) Namco_volume( &this->namco,  adjusted_gain );
+		if ( vrc6_enabled( this )  ) Vrc6_volume( &this->vrc6,    adjusted_gain );
+		if ( fme7_enabled( this )  ) Fme7_volume( &this->fme7,    adjusted_gain );
 		if ( mmc5_enabled( this )  ) Apu_volume( &this->mmc5.apu, adjusted_gain );
-		if ( fds_enabled( this )   ) Fds_volume( &this->fds, adjusted_gain );
+		if ( fds_enabled( this )   ) Fds_volume( &this->fds,      adjusted_gain );
 	}
 	#endif
 	
@@ -168,7 +168,7 @@ blargg_err_t init_sound( struct Nsf_Emu* this )
 }
 
 // Header stuff
-bool valid_tag( struct header_t* this )
+static bool valid_tag( struct header_t* this )
 {
 	return 0 == memcmp( this->tag, "NESM\x1A", 5 );
 }
@@ -179,12 +179,12 @@ static bool pal_only( struct header_t* this )
 	return (this->speed_flags & 3) == 1;
 }
 	
-static double clock_rate( struct header_t* this )
+static long clock_rate( struct header_t* this )
 {
-	return pal_only( this ) ? 1662607.125 : 1789772.727272727;
+	return pal_only( this ) ? (long)1662607.125 : (long)1789772.727272727;
 }
 
-int play_period( struct header_t* this )
+static int play_period( struct header_t* this )
 {
 	// NTSC
 	int         clocks   = 29780;
@@ -206,7 +206,7 @@ int play_period( struct header_t* this )
 	
 	// Custom rate
 	if ( rate != value )
-		clocks = (int) (rate * clock_rate( this ) * (1.0/1000000.0));
+		clocks = (int) ((1LL * rate * clock_rate( this )) / 1000000);
 	
 	return clocks;
 }
@@ -285,7 +285,7 @@ blargg_err_t Nsf_post_load( struct Nsf_Emu* this )
 	this->track_count = this->header.track_count;
 	
 	// Change clock rate & setup buffer
-	this->clock_rate__ = (long) (clock_rate( &this->header ) + 0.5);
+	this->clock_rate__ = (long) clock_rate( &this->header );
 	Buffer_clock_rate( &this->stereo_buf, this->clock_rate__ );
 	this->buf_changed_count = Buffer_channels_changed_count( &this->stereo_buf );
 	return 0;
@@ -370,7 +370,7 @@ void map_memory( struct Nsf_Emu* this )
 		Cpu_map_code( &this->cpu, rom_addr, fdsram_size, fdsram( this ), 0 );
 }
 
-void set_voice( struct Nsf_Emu* this, int i, struct Blip_Buffer* buf, struct Blip_Buffer* left, struct Blip_Buffer* right)
+static void set_voice( struct Nsf_Emu* this, int i, struct Blip_Buffer* buf, struct Blip_Buffer* left, struct Blip_Buffer* right)
 {
 #if defined(ROCKBOX)
 	(void) left;
@@ -474,16 +474,16 @@ void Sound_mute_voices( struct Nsf_Emu* this, int mask )
 	}
 }
 
-void Sound_set_tempo( struct Nsf_Emu* this, double t )
+void Sound_set_tempo( struct Nsf_Emu* this, int t )
 {
 	require( this->sample_rate ); // sample rate must be set first
-	double const min = 0.02;
-	double const max = 4.00;
+	int const min = (int)(FP_ONE_TEMPO*0.02);
+	int const max = (int)(FP_ONE_TEMPO*4.00);
 	if ( t < min ) t = min;
 	if ( t > max ) t = max;
 	this->tempo = t;
 	
-	set_play_period( this, (int) (play_period( &this->header ) / t) );
+	set_play_period( this, (int) ((play_period( &this->header ) * FP_ONE_TEMPO) / t) );
 
 	Apu_set_tempo( &this->apu, t );
 	
@@ -500,7 +500,7 @@ inline void push_byte( struct Nsf_Emu* this, int b )
 
 // Jumps to routine, given pointer to address in file header. Pushes idle_addr
 // as return address, NOT old PC.
-void jsr_then_stop( struct Nsf_Emu* this, byte const addr [] )
+static void jsr_then_stop( struct Nsf_Emu* this, byte const addr [] )
 {
 	this->cpu.r.pc = get_addr( addr );
 	push_byte( this, (idle_addr - 1) >> 8 );
@@ -533,7 +533,8 @@ int cpu_read( struct Nsf_Emu* this, addr_t addr )
 	return addr >> 8;
 }
 
-int unmapped_read( struct Nsf_Emu* this, addr_t addr )
+#if 0 /* function currently unused */
+static int unmapped_read( struct Nsf_Emu* this, addr_t addr )
 {
 	(void) this;
 	
@@ -548,6 +549,7 @@ int unmapped_read( struct Nsf_Emu* this, addr_t addr )
 	// Unmapped read
 	return addr >> 8;
 }
+#endif
 
 void cpu_write( struct Nsf_Emu* this, addr_t addr, int data )
 {
@@ -643,7 +645,8 @@ void cpu_write( struct Nsf_Emu* this, addr_t addr, int data )
 	// Unmapped_write
 }
 
-void unmapped_write( struct Nsf_Emu* this, addr_t addr, int data )
+#if 0 /* function currently unused */
+static void unmapped_write( struct Nsf_Emu* this, addr_t addr, int data )
 {
 	(void) data;
 	
@@ -662,6 +665,7 @@ void unmapped_write( struct Nsf_Emu* this, addr_t addr, int data )
 	// FDS memory
 	if ( fds_enabled( this ) && (unsigned) (addr - 0x8000) < 0x6000 ) return;
 }
+#endif
 
 void fill_buf( struct Nsf_Emu* this );
 blargg_err_t Nsf_start_track( struct Nsf_Emu* this, int track )
@@ -807,7 +811,7 @@ void run_until( struct Nsf_Emu* this, nes_time_t end )
 		run_once( this, end );
 }
 
-void end_frame( struct Nsf_Emu* this, nes_time_t end )
+static void end_frame( struct Nsf_Emu* this, nes_time_t end )
 {
 	if ( Cpu_time( &this->cpu ) < end )
 		run_until( this, end );
@@ -833,7 +837,7 @@ void end_frame( struct Nsf_Emu* this, nes_time_t end )
 
 // Tell/Seek
 
-blargg_long msec_to_samples( long sample_rate, blargg_long msec )
+static blargg_long msec_to_samples( long sample_rate, blargg_long msec )
 {
 	blargg_long sec = msec / 1000;
 	msec -= sec * 1000;
@@ -855,7 +859,7 @@ blargg_err_t Track_seek( struct Nsf_Emu* this, long msec )
 	return Track_skip( this, time - this->out_time );
 }
 
-blargg_err_t skip_( struct Nsf_Emu* this, long count ) ICODE_ATTR;
+blargg_err_t skip_( struct Nsf_Emu* this, long count );
 blargg_err_t Track_skip( struct Nsf_Emu* this, long count )
 {
 	require( this->current_track >= 0 ); // start_track() must have been called already
@@ -886,7 +890,7 @@ blargg_err_t Track_skip( struct Nsf_Emu* this, long count )
 	return 0;
 }
 
-blargg_err_t play_( struct Nsf_Emu* this, long count, sample_t* out ) ICODE_ATTR;
+blargg_err_t play_( struct Nsf_Emu* this, long count, sample_t* out );
 blargg_err_t skip_( struct Nsf_Emu* this, long count )
 {
 	// for long skip, mute sound
@@ -932,7 +936,7 @@ static int int_log( blargg_long x, int step, int unit )
 	return ((unit - fraction) + (fraction >> 1)) >> shift;
 }
 
-void handle_fade( struct Nsf_Emu* this, long out_count, sample_t* out )
+static void handle_fade( struct Nsf_Emu* this, long out_count, sample_t* out )
 {
 	int i;
 	for ( i = 0; i < out_count; i += fade_block_size )
@@ -956,7 +960,7 @@ void handle_fade( struct Nsf_Emu* this, long out_count, sample_t* out )
 
 // Silence detection
 
-void emu_play( struct Nsf_Emu* this, long count, sample_t* out ) ICODE_ATTR;
+void emu_play( struct Nsf_Emu* this, long count, sample_t* out );
 void emu_play( struct Nsf_Emu* this, long count, sample_t* out )
 {
 	check( current_track_ >= 0 );

@@ -82,7 +82,7 @@ void Square_clock_sweep( struct Nes_Square* this, int negative_adjust )
 }
 
 // TODO: clean up
-inline nes_time_t Square_maintain_phase( struct Nes_Square* this, nes_time_t time, nes_time_t end_time,
+static inline nes_time_t Square_maintain_phase( struct Nes_Square* this, nes_time_t time, nes_time_t end_time,
 		nes_time_t timer_period )
 {
 	nes_time_t remain = end_time - time;
@@ -183,7 +183,7 @@ void Triangle_clock_linear_counter( struct Nes_Triangle* this )
 		osc->reg_written [3] = false;
 }
 
-inline int Triangle_calc_amp( struct Nes_Triangle* this )
+static inline int Triangle_calc_amp( struct Nes_Triangle* this )
 {
 	int amp = Triangle_phase_range - this->phase;
 	if ( amp < 0 )
@@ -192,7 +192,7 @@ inline int Triangle_calc_amp( struct Nes_Triangle* this )
 }
 
 // TODO: clean up
-inline nes_time_t Triangle_maintain_phase( struct Nes_Triangle* this, nes_time_t time, nes_time_t end_time,
+static inline nes_time_t Triangle_maintain_phase( struct Nes_Triangle* this, nes_time_t time, nes_time_t end_time,
 		nes_time_t timer_period )
 {
 	nes_time_t remain = end_time - time;
@@ -326,7 +326,7 @@ int Dmc_count_reads( struct Nes_Dmc* this, nes_time_t time, nes_time_t* last_rea
 	return count;
 }
 
-static short const dmc_period_table [2] [16] ICONST_ATTR = {
+static short const dmc_period_table [2] [16] = {
 	{428, 380, 340, 320, 286, 254, 226, 214, // NTSC
 	190, 160, 142, 128, 106,  84,  72,  54},
 
@@ -340,7 +340,7 @@ inline void Dmc_reload_sample( struct Nes_Dmc* this )
 	this->osc.length_counter = this->osc.regs [3] * 0x10 + 1;
 }
 
-static byte const dac_table [128] ICONST_ATTR =
+static byte const dac_table [128] =
 {
 	 0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 9,10,11,12,13,14,
 	15,15,16,17,18,19,20,20,21,22,23,24,24,25,26,27,
@@ -479,7 +479,7 @@ void Dmc_run( struct Nes_Dmc* this, nes_time_t time, nes_time_t end_time )
 
 // Nes_Noise
 
-static short const noise_period_table [16] ICONST_ATTR = {
+static short const noise_period_table [16] = {
 	0x004, 0x008, 0x010, 0x020, 0x040, 0x060, 0x080, 0x0A0,
 	0x0CA, 0x0FE, 0x17C, 0x1FC, 0x2FA, 0x3F8, 0x7F2, 0xFE4
 };

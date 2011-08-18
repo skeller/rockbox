@@ -41,9 +41,9 @@ struct Nes_Fme7_Apu {
 void Fme7_init( struct Nes_Fme7_Apu* this );
 void Fme7_reset( struct Nes_Fme7_Apu* this );
 	
-static inline void Fme7_volume( struct Nes_Fme7_Apu* this, double v )
+static inline void Fme7_volume( struct Nes_Fme7_Apu* this, int v )
 {
-	Synth_volume( &this->synth, 0.38 / amp_range * v ); // to do: fine-tune
+	Synth_volume( &this->synth, (v/2 - (v*3)/25) / amp_range ); // to do: fine-tune
 }
 
 static inline void Fme7_osc_output( struct Nes_Fme7_Apu* this, int i, struct Blip_Buffer* buf )
@@ -63,7 +63,7 @@ static inline void Fme7_output( struct Nes_Fme7_Apu* this, struct Blip_Buffer* b
 static inline void Fme7_write_latch( struct Nes_Fme7_Apu* this, int data ) { this->latch = data; }
 
 // (addr & addr_mask) == data_addr
-void Fme7_run_until( struct Nes_Fme7_Apu* this, blip_time_t end_time ) ICODE_ATTR;
+void Fme7_run_until( struct Nes_Fme7_Apu* this, blip_time_t end_time );
 static inline void Fme7_write_data( struct Nes_Fme7_Apu* this, blip_time_t time, int data )
 {
 	if ( (unsigned) this->latch >= fme7_reg_count )

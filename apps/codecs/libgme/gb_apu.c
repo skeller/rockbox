@@ -24,7 +24,7 @@ int const wave_ram   = 0xFF30;
 
 int const power_mask = 0x80;
 
-inline int calc_output( struct Gb_Apu* this, int osc )
+static inline int calc_output( struct Gb_Apu* this, int osc )
 {
 	int bits = this->regs [stereo_reg - io_addr] >> osc;
 	return (bits >> 3 & 2) | (bits & 1);
@@ -49,13 +49,13 @@ void Apu_set_output( struct Gb_Apu* this, int i, struct Blip_Buffer* center, str
 	o->output = o->outputs [calc_output( this, i )];
 }
 
-void synth_volume( struct Gb_Apu* this, int iv )
+static void synth_volume( struct Gb_Apu* this, int iv )
 {
-	double v = this->volume_ * 0.60 / osc_count / 15 /*steps*/ / 8 /*master vol range*/ * iv;
+	int v = (this->volume_ * 6) / 10 / osc_count / 15 /*steps*/ / 8 /*master vol range*/ * iv;
 	Synth_volume( &this->synth, v );
 }
 
-void apply_volume( struct Gb_Apu* this )
+static void apply_volume( struct Gb_Apu* this )
 {
 	// TODO: Doesn't handle differing left and right volumes (panning).
 	// Not worth the complexity.
@@ -67,7 +67,7 @@ void apply_volume( struct Gb_Apu* this )
 	synth_volume( this, max( left, right ) + 1 );
 }
 
-void Apu_volume( struct Gb_Apu* this, double v )
+void Apu_volume( struct Gb_Apu* this, int v )
 {
 	if ( this->volume_ != v )
 	{
@@ -76,7 +76,7 @@ void Apu_volume( struct Gb_Apu* this, double v )
 	}
 }
 
-void reset_regs( struct Gb_Apu* this )
+static void reset_regs( struct Gb_Apu* this )
 {
 	int i;
 	for ( i = 0; i < 0x20; i++ )
@@ -90,7 +90,7 @@ void reset_regs( struct Gb_Apu* this )
 	apply_volume( this );
 }
 
-void reset_lengths( struct Gb_Apu* this )
+static void reset_lengths( struct Gb_Apu* this )
 {
 	this->square1.osc.length_ctr = 64;
 	this->square2.osc.length_ctr = 64;
@@ -136,7 +136,7 @@ void Apu_reset( struct Gb_Apu* this, enum gb_mode_t mode, bool agb_wave )
 	reset_lengths( this );
 	
 	// Load initial wave RAM
-	static byte const initial_wave [2] [16] ICONST_ATTR = {
+	static byte const initial_wave [2] [16] = {
 		{0x84,0x40,0x43,0xAA,0x2D,0x78,0x92,0x3C,0x60,0x59,0x59,0xB0,0x34,0xB8,0x2E,0xDA},
 		{0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF},
 	};
@@ -152,11 +152,11 @@ void Apu_reset( struct Gb_Apu* this, enum gb_mode_t mode, bool agb_wave )
 	}
 }
 
-void Apu_set_tempo( struct Gb_Apu* this, double t )
+void Apu_set_tempo( struct Gb_Apu* this, int t )
 {
 	this->frame_period = 4194304 / 512; // 512 Hz
-	if ( t != 1.0 )
-		this->frame_period = t ? (blip_time_t) (this->frame_period / t) : (blip_time_t) (0);
+	if ( t != (int)FP_ONE_TEMPO )
+		this->frame_period = t ? (blip_time_t) ((this->frame_period * FP_ONE_TEMPO) / t) : (blip_time_t) (0);
 }
 
 void Apu_init( struct Gb_Apu* this )
@@ -184,12 +184,12 @@ void Apu_init( struct Gb_Apu* this )
 	}
 	
 	this->reduce_clicks_ = false;
-	Apu_set_tempo( this, 1.0 );
-	this->volume_ = 1.0;
+	Apu_set_tempo( this, (int)FP_ONE_TEMPO );
+	this->volume_ = (int)FP_ONE_VOLUME;
 	Apu_reset( this, mode_cgb, false );
 }
 
-void run_until_( struct Gb_Apu* this, blip_time_t end_time )
+static void run_until_( struct Gb_Apu* this, blip_time_t end_time )
 {
 	if ( !this->frame_period )
 		this->frame_time += end_time - this->last_time;
@@ -238,7 +238,7 @@ void run_until_( struct Gb_Apu* this, blip_time_t end_time )
 	}
 }
 
-inline void run_until( struct Gb_Apu* this, blip_time_t time )
+static inline void run_until( struct Gb_Apu* this, blip_time_t time )
 {
 	require( time >= this->last_time ); // end_time must not be before previous time
 	if ( time > this->last_time )
@@ -261,7 +261,7 @@ void Apu_end_frame( struct Gb_Apu* this, blip_time_t end_time )
 	assert( this->last_time >= 0 );
 }
 
-void silence_osc( struct Gb_Apu* this, struct Gb_Osc* o )
+static void silence_osc( struct Gb_Apu* this, struct Gb_Osc* o )
 {
 	int delta = -o->last_amp;
 	if ( this->reduce_clicks_ )
@@ -278,7 +278,7 @@ void silence_osc( struct Gb_Apu* this, struct Gb_Osc* o )
 	}
 }
 
-void apply_stereo( struct Gb_Apu* this )
+static void apply_stereo( struct Gb_Apu* this )
 {
 	int i;
 	for ( i = osc_count; --i >= 0; )
@@ -383,7 +383,7 @@ int Apu_read_register( struct Gb_Apu* this, blip_time_t time, int addr )
 		return Wave_read( &this->wave, addr );
 	
 	// Value read back has some bits always set
-	static byte const masks [] ICONST_ATTR = {
+	static byte const masks [] = {
 		0x80,0x3F,0x00,0xFF,0xBF,
 		0xFF,0x3F,0x00,0xFF,0xBF,
 		0x7F,0xFF,0x9F,0xFF,0xBF,

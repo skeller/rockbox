@@ -35,10 +35,10 @@ wmapro.c
 ay.c
 gbs.c
 hes.c
-#if MEMORYSIZE > 2
 nsf.c
 sgc.c
 vgm.c
+#if MEMORYSIZE > 2
 kss.c
 #endif
 

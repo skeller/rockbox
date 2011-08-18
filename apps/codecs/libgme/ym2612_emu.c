@@ -35,15 +35,21 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 // Ported again to c by gama.
 // Not sure if performance is better than the original c version.
 
-#if !defined(ROCKBOX)
-	#define YM2612_CALCUL_TABLES
-#else
+#if !defined(YM2612_CALCUL_TABLES)
 	#include "ymtables.h"
+#endif
+
+#ifdef YM2612_CALCUL_TABLES
+    #define FREQ_TAB_LOOKUP g->LFO_FREQ_TAB
+    #define ENV_TAB_LOOKUP g->LFO_ENV_TAB
+#else
+    #define FREQ_TAB_LOOKUP lfo_freq_coeff
+    #define ENV_TAB_LOOKUP lfo_env_coeff
 #endif
 
 const int output_bits = 14;
 
-static const unsigned char DT_DEF_TAB [4 * 32] ICONST_ATTR =
+static const unsigned char DT_DEF_TAB [4 * 32] =
 {
 // FD = 0
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -62,7 +68,7 @@ static const unsigned char DT_DEF_TAB [4 * 32] ICONST_ATTR =
   8 , 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 22, 22, 22, 22
 };
 
-static const unsigned char FKEY_TAB [16] ICONST_ATTR =
+static const unsigned char FKEY_TAB [16] =
 { 
 	0, 0, 0, 0,
 	0, 0, 0, 1,
@@ -70,12 +76,12 @@ static const unsigned char FKEY_TAB [16] ICONST_ATTR =
 	3, 3, 3, 3
 };
 
-static const unsigned char LFO_AMS_TAB [4] ICONST_ATTR =
+static const unsigned char LFO_AMS_TAB [4] =
 {
 	31, 4, 1, 0
 };
 
-static const unsigned char LFO_FMS_TAB [8] ICONST_ATTR =
+static const unsigned char LFO_FMS_TAB [8] =
 {
 	LFO_FMS_BASE * 0, LFO_FMS_BASE * 1,
 	LFO_FMS_BASE * 2, LFO_FMS_BASE * 3,
@@ -86,7 +92,7 @@ static const unsigned char LFO_FMS_TAB [8] ICONST_ATTR =
 int in0, in1, in2, in3;            // current phase calculation
 // int en0, en1, en2, en3;            // current enveloppe calculation
 
-inline void set_seg( struct slot_t* s, int seg )
+static inline void set_seg( struct slot_t* s, int seg )
 {
 	s->env_xor = 0;
 	s->env_max = INT_MAX;
@@ -98,9 +104,9 @@ inline void set_seg( struct slot_t* s, int seg )
 	}
 }
 
-inline void YM2612_Special_Update(void) { }
+static inline void YM2612_Special_Update(void) { }
 
-void KEY_ON( struct channel_* ch, struct tables_t *g, int nsl )
+static void KEY_ON( struct channel_* ch, struct tables_t *g, int nsl )
 {
 	struct slot_t *SL = &(ch->SLOT [nsl]);  // on recupere le bon pointeur de slot
 	
@@ -123,7 +129,7 @@ void KEY_ON( struct channel_* ch, struct tables_t *g, int nsl )
 }
 
 
-void KEY_OFF( struct channel_* ch, struct tables_t *g, int nsl )
+static void KEY_OFF( struct channel_* ch, struct tables_t *g, int nsl )
 {
 	struct slot_t *SL = &(ch->SLOT [nsl]);  // on recupere le bon pointeur de slot
 	
@@ -141,7 +147,7 @@ void KEY_OFF( struct channel_* ch, struct tables_t *g, int nsl )
 }
 
 
-int SLOT_SET( struct Ym2612_Impl* impl, int Adr, int data )
+static int SLOT_SET( struct Ym2612_Impl* impl, int Adr, int data )
 {
 	int nch = Adr & 3;
 	if ( nch == 3 )
@@ -245,7 +251,7 @@ int SLOT_SET( struct Ym2612_Impl* impl, int Adr, int data )
 }
 
 
-int CHANNEL_SET( struct state_t* YM2612, int Adr, int data )
+static int CHANNEL_SET( struct state_t* YM2612, int Adr, int data )
 {
 	int num = Adr & 3;
 	if ( num == 3 )
@@ -348,7 +354,7 @@ int CHANNEL_SET( struct state_t* YM2612, int Adr, int data )
 }
 
 
-int YM_SET( struct Ym2612_Impl* impl, int Adr, int data )
+static int YM_SET( struct Ym2612_Impl* impl, int Adr, int data )
 {
 	struct state_t* YM2612 = &impl->YM2612;
 	struct tables_t* g = &impl->g;
@@ -480,11 +486,11 @@ double ipow(double a,int b)
 #endif
 
 void impl_reset( struct Ym2612_Impl* impl );
-void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_rate )
+static void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_rate )
 {
 	assert( sample_rate );
 	assert( !clock_rate || clock_rate > sample_rate );
-	
+		
 	int i;
 
 	// 144 = 12 * (prescale * 2) = 12 * 6 * 2
@@ -499,6 +505,7 @@ void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_r
 	// [0     -  4095] = +output  [4095  - ...] = +output overflow (fill with 0)
 	// [12288 - 16383] = -output  [16384 - ...] = -output overflow (fill with 0)
 
+#ifdef YM2612_USE_TL_TAB
 	for ( i = 0; i < TL_LENGHT; i++ )
 	{
 		if (i >= PG_CUT_OFF)    // YM2612 cut off sound after 78 dB (14 bits output ?)
@@ -516,6 +523,7 @@ void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_r
 			impl->g.TL_TAB [TL_LENGHT + i] = -impl->g.TL_TAB [i];
 		}
 	}
+#endif
 	
 	// Tableau SIN :
 	// impl->g.SIN_TAB [x] [y] = sin(x) * y; 
@@ -540,11 +548,10 @@ void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_r
 		impl->g.SIN_TAB [(SIN_LENGHT / 2) + i] = impl->g.SIN_TAB [SIN_LENGHT - i] = TL_LENGHT + j;
 	}
 
+    #ifdef YM2612_CALCUL_TABLES
 	// Tableau LFO (LFO wav) :
-
 	for ( i = 0; i < LFO_LENGHT; i++ )
 	{
-	#ifdef YM2612_CALCUL_TABLES
 		double x = 1 + sin( 2.0 * PI * i * (1.0 / LFO_LENGHT) );    // Sinus
 		x *= 11.8 / ENV_STEP / 2;       // ajusted to MAX enveloppe modulation
 
@@ -554,11 +561,8 @@ void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_r
 		x *= (1 << (LFO_HBITS - 1)) - 1;
 
 		impl->g.LFO_FREQ_TAB [i] = (int) x;
-	#else
-		impl->g.LFO_ENV_TAB [i] = lfo_env_coeff [i];
-		impl->g.LFO_FREQ_TAB [i] = lfo_freq_coeff [i];
-	#endif
 	}
+    #endif
 
 	// Tableau Enveloppe :
 	// impl->g.ENV_TAB [0] -> impl->g.ENV_TAB [ENV_LENGHT - 1]              = attack curve
@@ -682,20 +686,20 @@ void impl_set_rate( struct Ym2612_Impl* impl, double sample_rate, double clock_r
 	impl_reset( impl );
 }
 
-const char* Ym2612_set_rate( struct Ym2612_Emu* this, double sample_rate, double clock_rate )
+const char* Ym2612_set_rate( struct Ym2612_Emu* this, int sample_rate, int clock_rate )
 {
 // Only set rates if necessary
 #if defined(ROCKBOX)
-	static double last_sample_rate = 0.0, last_clock_rate = 0.0;
+	static int last_sample_rate = 0, last_clock_rate = 0;
 	if (last_sample_rate == sample_rate && last_clock_rate == clock_rate) return 0;
 #endif
 	memset( &this->impl.YM2612, 0, sizeof this->impl.YM2612 );
-	impl_set_rate( &this->impl, sample_rate, clock_rate );
+	impl_set_rate( &this->impl, (double)sample_rate, (double)clock_rate );
 	
 	return 0;
 }
 
-inline void write0( struct Ym2612_Impl* impl, int opn_addr, int data )
+static inline void write0( struct Ym2612_Impl* impl, int opn_addr, int data )
 {
 	assert( (unsigned) data <= 0xFF );
 	
@@ -715,7 +719,7 @@ inline void write0( struct Ym2612_Impl* impl, int opn_addr, int data )
 	}
 }
 
-inline void write1( struct Ym2612_Impl* impl, int opn_addr, int data )
+static inline void write1( struct Ym2612_Impl* impl, int opn_addr, int data )
 {
 	assert( (unsigned) data <= 0xFF );
 	
@@ -901,13 +905,29 @@ int YM2612_LFOcnt = g->LFOcnt + YM2612_LFOinc;
  			((temp##x - ch->SLOT [S##x].env_max) >> 31);
 				
 #define GET_ENV \
-int const env_LFO = g->LFO_ENV_TAB [YM2612_LFOcnt >> LFO_LBITS & LFO_MASK]; \
+int const env_LFO = ENV_TAB_LOOKUP [YM2612_LFOcnt >> LFO_LBITS & LFO_MASK]; \
 short const* const ENV_TAB = g->ENV_TAB; \
 CALC_EN( 0 ) \
 CALC_EN( 1 ) \
 CALC_EN( 2 ) \
-CALC_EN( 3 ) \
-int const* const TL_TAB = g->TL_TAB;
+CALC_EN( 3 )
+
+#ifndef YM2612_USE_TL_TAB
+static inline int tl_level( int i )
+{
+	if (i >= (PG_CUT_OFF + TL_LENGHT)) {
+		return 0;
+	} else if (i >= TL_LENGHT) {
+		return -tl_coeff [i - TL_LENGHT];
+	} else if (i >= PG_CUT_OFF) {
+		return 0;
+	} else
+		return tl_coeff [i];
+}
+#define SINT( i, o ) (tl_level (g->SIN_TAB [(i)] + (o)))
+#else
+#define SINT( i, o ) (g->TL_TAB [g->SIN_TAB [(i)] + (o)])
+#endif
 
 #define DO_FEEDBACK               \
 int CH_S0_OUT_0 = ch->S0_OUT [0]; \
@@ -917,13 +937,11 @@ int CH_S0_OUT_0 = ch->S0_OUT [0]; \
 	CH_S0_OUT_0 = SINT( (temp >> SIN_LBITS) & SIN_MASK, en0 ); \
 } \
 
-#define SINT( i, o ) (TL_TAB [g->SIN_TAB [(i)] + (o)])
-
 #define DO_LIMIT \
 CH_OUTd >>= MAX_OUT_BITS - output_bits + 2; \
 
 #define UPDATE_PHASE_CYCLE \
-unsigned freq_LFO = ((g->LFO_FREQ_TAB [YM2612_LFOcnt >> LFO_LBITS & LFO_MASK] * \
+unsigned freq_LFO = ((FREQ_TAB_LOOKUP [YM2612_LFOcnt >> LFO_LBITS & LFO_MASK] * \
 			ch->FMS) >> (LFO_HBITS - 1 + 1)) + (1 << (LFO_FMS_LBITS - 1)); \
 YM2612_LFOcnt += YM2612_LFOinc; \
 in0 += (ch->SLOT [S0].Finc * freq_LFO) >> (LFO_FMS_LBITS - 1); \
@@ -954,7 +972,7 @@ ch->SLOT [S1].Fcnt = in1; \
 ch->SLOT [S2].Fcnt = in2; \
 ch->SLOT [S3].Fcnt = in3;
 
-void ym2612_update_chan0( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan0( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -987,7 +1005,7 @@ void ym2612_update_chan0( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan1( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan1( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1019,7 +1037,7 @@ void ym2612_update_chan1( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan2( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan2( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1051,7 +1069,7 @@ void ym2612_update_chan2( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan3( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan3( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1084,7 +1102,7 @@ void ym2612_update_chan3( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan4( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan4( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1118,7 +1136,7 @@ void ym2612_update_chan4( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan5( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan5( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1154,7 +1172,7 @@ void ym2612_update_chan5( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan6( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan6( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1189,7 +1207,7 @@ void ym2612_update_chan6( struct tables_t* g, struct channel_* ch,
 	UPDATE_PHASE
 }
 
-void ym2612_update_chan7( struct tables_t* g, struct channel_* ch,
+static void ym2612_update_chan7( struct tables_t* g, struct channel_* ch,
 		short* buf, int length )
 {
 	int not_end = ch->SLOT [S3].Ecnt - ENV_END;
@@ -1238,7 +1256,7 @@ static void (*UPDATE_CHAN[8])(struct tables_t* g, struct channel_* ch,
 	(void *)ym2612_update_chan7
 };
 
-void run_timer( struct Ym2612_Impl* impl, int length )
+static void run_timer( struct Ym2612_Impl* impl, int length )
 {
 	int const step = 6;
 	int remain = length;
@@ -1284,7 +1302,7 @@ void run_timer( struct Ym2612_Impl* impl, int length )
 	while ( remain > 0 );
 }
 
-void impl_run( struct Ym2612_Impl* impl, int pair_count, short out [] )
+static void impl_run( struct Ym2612_Impl* impl, int pair_count, short out [] )
 {
 	if ( pair_count <= 0 )
 		return;

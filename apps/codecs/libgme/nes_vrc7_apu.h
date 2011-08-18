@@ -27,11 +27,11 @@ struct Nes_Vrc7_Apu {
 // See Nes_Apu.h for reference
 void Vrc7_init( struct Nes_Vrc7_Apu* this );
 void Vrc7_reset( struct Nes_Vrc7_Apu* this );
-void Vrc7_set_rate( struct Nes_Vrc7_Apu* this, double r );
-void Vrc7_end_frame( struct Nes_Vrc7_Apu* this, blip_time_t ) ICODE_ATTR;
+void Vrc7_set_rate( struct Nes_Vrc7_Apu* this, int r );
+void Vrc7_end_frame( struct Nes_Vrc7_Apu* this, blip_time_t );
 
-void Vrc7_write_reg( struct Nes_Vrc7_Apu* this, int reg ) ICODE_ATTR;
-void Vrc7_write_data( struct Nes_Vrc7_Apu* this, blip_time_t, int data ) ICODE_ATTR;
+void Vrc7_write_reg( struct Nes_Vrc7_Apu* this, int reg );
+void Vrc7_write_data( struct Nes_Vrc7_Apu* this, blip_time_t, int data );
 
 void output_changed( struct Nes_Vrc7_Apu* this );
 static inline void Vrc7_set_output( struct Nes_Vrc7_Apu* this, int i, struct Blip_Buffer* buf )
@@ -47,6 +47,6 @@ static inline void Vrc7_set_output( struct Nes_Vrc7_Apu* this, int i, struct Bli
 }
 
 // DB2LIN_AMP_BITS == 11, * 2
-static inline void Vrc7_volume( struct Nes_Vrc7_Apu* this, double v ) { Synth_volume( &this->synth, 1.0 / 3 / 4096 * v ); }
+static inline void Vrc7_volume( struct Nes_Vrc7_Apu* this, int v ) { Synth_volume( &this->synth, v / 3 / 4096 ); }
 
 #endif
