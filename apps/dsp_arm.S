@@ -398,7 +398,7 @@ apply_crossfeed:
  *                    in32_t *src[], int32_t *dst[])
  */
 
-#ifdef DSP_HAVE_ASM_RESAMPLING
+#ifndef DSP_USE_SINC_RESAMPLING
     .section    .text
     .global     dsp_downsample
 dsp_downsample:
