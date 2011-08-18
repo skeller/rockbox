@@ -81,15 +81,22 @@ enum
 #define FILTER_SIZE 15
 #define FILTER_DELAY 7
 
+struct resample_buffer
+{
+    uint32_t buf_fill;
+    int32_t sample_buf[2][FILTER_SIZE];
+    int32_t resample_buf[2][FILTER_SIZE*2];
+};
+
 struct resample_data
 {
     uint32_t increment;			    /* 00h */
     uint32_t current;			    /* 04h */
-    uint32_t buf_fill;			    /* 08h */
-    int32_t sample_buf[2][FILTER_SIZE];
-    int32_t resample_buf[2][FILTER_SIZE*2];
-    int32_t sinc[256][8];
+    uint32_t reserved;  		    /* 08h */
+    int32_t (*sinc)[256][8];                /* 0ch */
+					    /* 10h */
 };
+
 #else
 struct resample_data
 {
@@ -212,6 +219,9 @@ struct dsp_config
     channels_process_fn_type     eq_process;
     channels_process_fn_type     channels_process;
     channels_process_fn_type     compressor_process;
+#ifdef DSP_USE_SINC_RESAMPLING
+    struct resample_buffer resample_buffer;
+#endif
 };
 
 /* General DSP config */
@@ -731,7 +741,7 @@ static int dsp_resample(int count, struct dsp_data *data,
         d = dst[i];
 
         while((cur>>16) < (unsigned)count - FILTER_DELAY) {
-            int32_t sample = sinc_resample(src[i], cur, data->resample_data.sinc);
+            int32_t sample = sinc_resample(src[i], cur, *(data->resample_data.sinc));
             // should never happen, but maybe because of rounding etc. it does:
             if(sample > 32767<<12) sample = 32767<<12;
             else if (sample < -32768<<12) sample = -32768<<12;
@@ -745,25 +755,60 @@ static int dsp_resample(int count, struct dsp_data *data,
     return d - dst[data->num_channels-1];
 }
 
+static int resampler_init(struct dsp_config *dsp)
+{
+    if(dsp->data.resample_data.sinc == NULL) {
+#if 0
+        dsp->data.resample_data.sinc = buffer_alloc(sizeof(*(dsp->data.resample_data.sinc)));
+        if(sinc == NULL) {
+            return -1;
+        }
+#else
+        /* cache-line align */
+        char *sinc = buffer_alloc(sizeof(*(dsp->data.resample_data.sinc)) + CACHEALIGN_SIZE);
+        if(sinc == NULL) {
+            return -1;
+        }
+	dsp->data.resample_data.sinc = (void *)((long)(sinc + CACHEALIGN_SIZE - 1) & ~(CACHEALIGN_SIZE - 1));
+#endif
+    }
+    return 0;
+}
+
+void dsp_resample_init(void)
+{
+    resampler_init(&AUDIO_DSP);
+    resampler_init(&VOICE_DSP);
+}
+
+static void resampler_reset(struct dsp_config *dsp)
+{
+    memset(dsp->resample_buffer.resample_buf, 0, sizeof(dsp->resample_buffer.resample_buf));
+    dsp->resample_buffer.buf_fill = 0; /* fixme: initialize to FILTER_DELAY on startup */
+    dsp->data.resample_data.current = FILTER_SIZE<<16; /* fixme: initialize on startup */
+}
+
 static void resampler_new_delta(struct dsp_config *dsp)
 {
     int i, k;
     dsp->data.resample_data.increment = (uint32_t)
         dsp->frequency * 65536LL / NATIVE_FREQUENCY;
 
-    if (dsp->frequency == NATIVE_FREQUENCY)
-    {
+    if(dsp->data.resample_data.sinc == NULL) {
+        dsp->resample = NULL;
+	dsp->data.resample_data.increment = 0x10000;
+        return;
+    }
+
+    if (dsp->frequency == NATIVE_FREQUENCY) {
         /* NOTE: If fully glitch-free transistions from no resampling to
            resampling are desired, last_sample history should be maintained
            even when not resampling. */
         dsp->resample = NULL;
-        memset(dsp->data.resample_data.resample_buf, 0, sizeof(dsp->data.resample_data.resample_buf));
-        dsp->data.resample_data.buf_fill = 0; /* fixme: initialize to FILTER_DELAY on startup */
-        dsp->data.resample_data.current = FILTER_SIZE<<16; /* fixme: initialize on startup */
-    }
-    else if (dsp->frequency < NATIVE_FREQUENCY) {
+        resampler_reset(dsp);
+    } else if (dsp->frequency < NATIVE_FREQUENCY) {
         dsp->resample = dsp_resample;
-        memcpy(dsp->data.resample_data.sinc, sinc, sizeof(sinc));
+        memcpy(*(dsp->data.resample_data.sinc), sinc, sizeof(sinc));
     } else {
         uint32_t sinc_inc = (uint32_t)
             NATIVE_FREQUENCY * 256LL / dsp->frequency;
@@ -788,7 +833,7 @@ static void resampler_new_delta(struct dsp_config *dsp)
                 /* scaling of sinc */
                 /* we need to use scale as 17.15, because sinc's max is 1.0
                  * and it is signed */
-                dsp->data.resample_data.sinc[k][i] =
+                (*(dsp->data.resample_data.sinc))[k][i] =
                     (sinc_val * (int32_t)(NATIVE_FREQUENCY * 32768LL / dsp->frequency)) >> 15;
                 sinc_cur += sinc_inc;
             }
@@ -803,16 +848,17 @@ static void resampler_new_delta(struct dsp_config *dsp)
 static inline int resample_core(struct dsp_config *dsp, unsigned count, int32_t *src[], int32_t *dst[])
 {
     struct resample_data *rsdata = &dsp->data.resample_data;
+    struct resample_buffer *rsbuf = &dsp->resample_buffer;
     int32_t *sb_src[2] =
     {
-        &rsdata->resample_buf[0][0],
-        &rsdata->resample_buf[1][0],
+        &rsbuf->resample_buf[0][0],
+        &rsbuf->resample_buf[1][0],
     };
     int cnt;
 
-    memcpy(&rsdata->resample_buf[0][FILTER_SIZE], src[0], FILTER_SIZE  * sizeof(int32_t));
+    memcpy(&rsbuf->resample_buf[0][FILTER_SIZE], src[0], FILTER_SIZE  * sizeof(int32_t));
     if (dsp->data.num_channels >  1)
-        memcpy(&rsdata->resample_buf[1][FILTER_SIZE], src[1], FILTER_SIZE * sizeof(int32_t));
+        memcpy(&rsbuf->resample_buf[1][FILTER_SIZE], src[1], FILTER_SIZE * sizeof(int32_t));
 
     cnt = dsp->resample(FILTER_SIZE*2, &dsp->data, (const int32_t **)sb_src, dst);
 
@@ -825,8 +871,8 @@ static inline int resample_core(struct dsp_config *dsp, unsigned count, int32_t 
         cnt += dsp->resample((int)count, &dsp->data, (const int32_t **)src, add_dst);
     }
 
-    memcpy(rsdata->resample_buf[0], &src[0][count - FILTER_SIZE], FILTER_SIZE * sizeof(int32_t));
-    memcpy(rsdata->resample_buf[1], &src[dsp->data.num_channels - 1][count - FILTER_SIZE], FILTER_SIZE * sizeof(int32_t));
+    memcpy(rsbuf->resample_buf[0], &src[0][count - FILTER_SIZE], FILTER_SIZE * sizeof(int32_t));
+    memcpy(rsbuf->resample_buf[1], &src[dsp->data.num_channels - 1][count - FILTER_SIZE], FILTER_SIZE * sizeof(int32_t));
 
     rsdata->current -= ((count - FILTER_SIZE) << 16);
 
@@ -844,27 +890,27 @@ static inline int resample(struct dsp_config *dsp, int count, int32_t *src[])
         &resample_buf[RESAMPLE_BUF_LEFT_CHANNEL],
         &resample_buf[RESAMPLE_BUF_RIGHT_CHANNEL],
     };
-    struct resample_data *rsdata = &dsp->data.resample_data;
+    struct resample_buffer *rsbuf = &dsp->resample_buffer;
     int res = 0;
 
-    if(rsdata->buf_fill || count < FILTER_SIZE) {
-        unsigned size = (count - rsdata->buf_fill > FILTER_SIZE)? FILTER_SIZE - rsdata->buf_fill : (unsigned)count;
-        memcpy(&rsdata->sample_buf[0][rsdata->buf_fill], src[0], size * sizeof(int32_t));
-        memcpy(&rsdata->sample_buf[1][rsdata->buf_fill], src[dsp->data.num_channels - 1], size * sizeof(int32_t));
-        rsdata->buf_fill += size;
+    if(rsbuf->buf_fill || count < FILTER_SIZE) {
+        unsigned size = (count - rsbuf->buf_fill > FILTER_SIZE)? FILTER_SIZE - rsbuf->buf_fill : (unsigned)count;
+        memcpy(&rsbuf->sample_buf[0][rsbuf->buf_fill], src[0], size * sizeof(int32_t));
+        memcpy(&rsbuf->sample_buf[1][rsbuf->buf_fill], src[dsp->data.num_channels - 1], size * sizeof(int32_t));
+        rsbuf->buf_fill += size;
         count -= size;
         src[0] += size;
         src[1] += size;
     }
 
-    if(rsdata->buf_fill == FILTER_SIZE) {
+    if(rsbuf->buf_fill == FILTER_SIZE) {
         int32_t *buf_src[2] =
         {
-            rsdata->sample_buf[0],
-            rsdata->sample_buf[1],
+            rsbuf->sample_buf[0],
+            rsbuf->sample_buf[1],
         };
         res = resample_core(dsp, FILTER_SIZE, buf_src, dst);
-        rsdata->buf_fill = 0;
+        rsbuf->buf_fill = 0;
     }
 
     if(count > FILTER_SIZE) {
@@ -874,9 +920,9 @@ static inline int resample(struct dsp_config *dsp, int count, int32_t *src[])
         res += resample_core(dsp, (unsigned)count, src, add_dst);
     } else if(count) {
         /* assert(rsdata->buf_fill == 0); */
-        memcpy(rsdata->sample_buf[0], src[0], count * sizeof(int32_t));
-        memcpy(rsdata->sample_buf[1], src[dsp->data.num_channels - 1], count * sizeof(int32_t));
-        rsdata->buf_fill = count;
+        memcpy(rsbuf->sample_buf[0], src[0], count * sizeof(int32_t));
+        memcpy(rsbuf->sample_buf[1], src[dsp->data.num_channels - 1], count * sizeof(int32_t));
+        rsbuf->buf_fill = count;
     }
 
     src[0] = dst[0];
@@ -1602,7 +1648,7 @@ int dsp_input_count(struct dsp_config *dsp, int count)
 #ifdef DSP_USE_SINC_RESAMPLING
         count = (int)(((unsigned long)count *
                       dsp->data.resample_data.increment) >> 16);
-        count = count - dsp->data.resample_data.buf_fill;
+        count -= dsp->resample_buffer.buf_fill;
         if(count < 0) count = 0;
 #else
         count = (int)(((unsigned long)count *
@@ -1648,9 +1694,10 @@ intptr_t dsp_configure(struct dsp_config *dsp, int setting, intptr_t value)
         }
 
     case DSP_SET_FREQUENCY:
-        memset(&dsp->data.resample_data, 0, sizeof (dsp->data.resample_data));
 #ifdef DSP_USE_SINC_RESAMPLING
-        dsp->data.resample_data.current = FILTER_SIZE<<16;
+        resampler_reset(dsp);
+#else
+        memset(&dsp->data.resample_data, 0, sizeof (dsp->data.resample_data));
 #endif
         /* Fall through!!! */
     case DSP_SWITCH_FREQUENCY:
@@ -1734,10 +1781,11 @@ intptr_t dsp_configure(struct dsp_config *dsp, int setting, intptr_t value)
         break;
 
     case DSP_FLUSH:
+#ifdef DSP_USE_SINC_RESAMPLING
+        resampler_reset(dsp);
+#else
         memset(&dsp->data.resample_data, 0,
                sizeof (dsp->data.resample_data));
-#ifdef DSP_USE_SINC_RESAMPLING
-        dsp->data.resample_data.current = FILTER_SIZE<<16;
 #endif
         resampler_new_delta(dsp);
         dither_init(dsp);

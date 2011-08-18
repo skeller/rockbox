@@ -84,5 +84,7 @@ int32_t dsp_get_timestretch(void);
 int dsp_callback(int msg, intptr_t param);
 void dsp_set_compressor(int c_threshold, int c_gain, int c_ratio,
                         int c_knee, int c_release);
-
+#ifdef DSP_USE_SINC_RESAMPLING
+void dsp_resample_init(void) INIT_ATTR;
+#endif
 #endif

@@ -87,6 +87,7 @@
 #if (CONFIG_CODEC == SWCODEC)
 #include "playback.h"
 #include "tdspeed.h"
+#include "dsp.h"
 #endif
 #if (CONFIG_CODEC == SWCODEC) && defined(HAVE_RECORDING) && !defined(SIMULATOR)
 #include "pcm_record.h"
@@ -410,6 +411,10 @@ static void init(void)
     tdspeed_init();
 #endif /* CONFIG_CODEC == SWCODEC */
 
+#if CONFIG_CODEC == SWCODEC && defined (DSP_USE_SINC_RESAMPLING)
+    dsp_resample_init();
+#endif /* CONFIG_CODEC == SWCODEC */
+
     audio_init();
     
     settings_apply_skins();
@@ -671,6 +676,9 @@ static void init(void)
     scrobbler_init();
 #if CONFIG_CODEC == SWCODEC && defined (HAVE_PITCHSCREEN)
     tdspeed_init();
+#endif /* CONFIG_CODEC == SWCODEC */
+#if CONFIG_CODEC == SWCODEC && defined (DSP_USE_SINC_RESAMPLING)
+    dsp_resample_init();
 #endif /* CONFIG_CODEC == SWCODEC */
     theme_init_buffer();
 
