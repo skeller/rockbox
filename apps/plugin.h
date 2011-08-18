@@ -146,12 +146,12 @@ void* plugin_get_buffer(size_t *buffer_size);
 #define PLUGIN_MAGIC 0x526F634B /* RocK */
 
 /* increase this every time the api struct changes */
-#define PLUGIN_API_VERSION 209
+#define PLUGIN_API_VERSION 210
 
 /* update this to latest version if a change to the api struct breaks
    backwards compatibility (and please take the opportunity to sort in any
    new function which are "waiting" at the end of the function table) */
-#define PLUGIN_MIN_API_VERSION 209
+#define PLUGIN_MIN_API_VERSION 210
 
 /* plugin return codes */
 /* internal returns start at 0x100 to make exit(1..255) work */
@@ -828,12 +828,14 @@ struct plugin_api {
 #endif /* CONFIG_CODEC == SWCODEC */
     bool (*get_metadata)(struct mp3entry* id3, int fd, const char* trackname);
     bool (*mp3info)(struct mp3entry *entry, const char *filename);
-    int (*count_mp3_frames)(int fd, int startpos, int filesize,
-                            void (*progressfunc)(int));
+    int (*count_mp3_frames)(int fd,  int startpos,  int filesize,
+                     void (*progressfunc)(int),
+                     unsigned char* buf, size_t buflen);
     int (*create_xing_header)(int fd, long startpos, long filesize,
             unsigned char *buf, unsigned long num_frames,
             unsigned long rec_time, unsigned long header_template,
-            void (*progressfunc)(int), bool generate_toc);
+            void (*progressfunc)(int), bool generate_toc,
+            unsigned char* tempbuf, size_t tempbuf_len);
     unsigned long (*find_next_frame)(int fd, long *offset,
             long max_offset, unsigned long reference_header);
 

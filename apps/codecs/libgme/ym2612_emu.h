@@ -6,6 +6,14 @@
 
 #include "blargg_common.h"
 
+#if !defined(ROCKBOX)
+	#define YM2612_CALCUL_TABLES
+#endif
+
+#if MEMORYSIZE > 2
+    #define YM2612_USE_TL_TAB
+#endif
+
 enum { ym2612_out_chan_count = 2 }; // stereo
 enum { ym2612_channel_count = 6 };
 enum { ym2612_disabled_time = -1 };
@@ -164,10 +172,13 @@ struct tables_t
 	int LFO_INC_TAB [8];                        // LFO step table
 	
 	short ENV_TAB [2 * ENV_LENGHT + 8];         // ENV CURVE TABLE (attack & decay)
-	
+#ifdef YM2612_CALCUL_TABLES
 	short LFO_ENV_TAB [LFO_LENGHT];             // LFO AMS TABLE (adjusted for 11.8 dB)
 	short LFO_FREQ_TAB [LFO_LENGHT];            // LFO FMS TABLE
-	int TL_TAB [TL_LENGHT * 2];                 // TOTAL LEVEL TABLE (positif and minus)
+#endif
+#ifdef YM2612_USE_TL_TAB
+    int TL_TAB [TL_LENGHT * 2];                 // TOTAL LEVEL TABLE (positif and minus)
+#endif
 	unsigned int DECAY_TO_ATTACK [ENV_LENGHT];  // Conversion from decay to attack phase
 	unsigned int FINC_TAB [2048];               // Frequency step table
 };
@@ -199,7 +210,7 @@ static inline void Ym2612_init( struct Ym2612_Emu* this_ )
 	
 // Sets sample rate and chip clock rate, in Hz. Returns non-zero
 // if error. If clock_rate=0, uses sample_rate*144
-const char* Ym2612_set_rate( struct Ym2612_Emu* this_, double sample_rate, double clock_rate );
+const char* Ym2612_set_rate( struct Ym2612_Emu* this_, int sample_rate, int clock_rate );
 	
 // Resets to power-up state
 void Ym2612_reset( struct Ym2612_Emu* this_ );
@@ -208,13 +219,13 @@ void Ym2612_reset( struct Ym2612_Emu* this_ );
 void Ym2612_mute_voices( struct Ym2612_Emu* this_, int mask );
 	
 // Writes addr to register 0 then data to register 1
-void Ym2612_write0( struct Ym2612_Emu* this_, int addr, int data ) ICODE_ATTR;
+void Ym2612_write0( struct Ym2612_Emu* this_, int addr, int data );
 	
 // Writes addr to register 2 then data to register 3
-void Ym2612_write1( struct Ym2612_Emu* this_, int addr, int data ) ICODE_ATTR;
+void Ym2612_write1( struct Ym2612_Emu* this_, int addr, int data );
 	
 // Runs and adds pair_count*2 samples into current output buffer contents
-void Ym2612_run( struct Ym2612_Emu* this_, int pair_count, short* out ) ICODE_ATTR;
+void Ym2612_run( struct Ym2612_Emu* this_, int pair_count, short* out );
 
 static inline void Ym2612_enable( struct Ym2612_Emu* this_, bool b ) { this_->last_time = b ? 0 : ym2612_disabled_time; }
 static inline bool Ym2612_enabled( struct Ym2612_Emu* this_ ) { return this_->last_time != ym2612_disabled_time; }

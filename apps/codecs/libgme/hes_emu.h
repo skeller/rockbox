@@ -69,8 +69,8 @@ struct Hes_Emu {
 	long sample_rate_;
 	unsigned buf_changed_count;
 	int voice_count_;
-	double tempo_;
-	double gain_;
+	int tempo_;
+	int gain_;
 	
 	// track-specific
 	byte track_count;
@@ -136,7 +136,7 @@ blargg_err_t Hes_start_track( struct Hes_Emu* this, int );
 
 // Generate 'count' samples info 'buf'. Output is in stereo. Any emulation
 // errors set warning string, and major errors also end track.
-blargg_err_t Hes_play( struct Hes_Emu* this, long count, sample_t* buf ) ICODE_ATTR;
+blargg_err_t Hes_play( struct Hes_Emu* this, long count, sample_t* buf );
 
 // Track status/control
 // Number of milliseconds (1000 msec = 1 second) played since ning of track
@@ -168,7 +168,7 @@ static inline long Track_get_length( struct Hes_Emu* this, int n )
 // Sound customization
 // Adjust song tempo, where 1.0 = normal, 0.5 = half speed, 2.0 = double speed.
 // Track length as returned by track_info() assumes a tempo of 1.0.
-void Sound_set_tempo( struct Hes_Emu* this, double );
+void Sound_set_tempo( struct Hes_Emu* this, int );
 
 // Mute/unmute voice i, where voice 0 is first voice
 void Sound_mute_voice( struct Hes_Emu* this, int index, bool mute );
@@ -179,7 +179,7 @@ void Sound_mute_voices( struct Hes_Emu* this, int mask );
 
 // Change overall output amplitude, where 1.0 results in minimal clamping.
 // Must be called before set_sample_rate().
-static inline void Sound_set_gain( struct Hes_Emu* this, double g )
+static inline void Sound_set_gain( struct Hes_Emu* this, int g )
 {
 	assert( !this->sample_rate_ ); // you must set gain before setting sample rate
 	this->gain_ = g;
@@ -188,13 +188,13 @@ static inline void Sound_set_gain( struct Hes_Emu* this, double g )
 
 // Emulation (You shouldn't touch these)
 
-int Cpu_read( struct Hes_Emu* this, hes_addr_t ) ICODE_ATTR;
-void Cpu_write( struct Hes_Emu* this, hes_addr_t, int ) ICODE_ATTR;
-void Cpu_write_vdp( struct Hes_Emu* this, int addr, int data ) ICODE_ATTR;
-int Cpu_done( struct Hes_Emu* this ) ICODE_ATTR;
+int Cpu_read( struct Hes_Emu* this, hes_addr_t );
+void Cpu_write( struct Hes_Emu* this, hes_addr_t, int );
+void Cpu_write_vdp( struct Hes_Emu* this, int addr, int data );
+int Cpu_done( struct Hes_Emu* this );
 
-int Emu_cpu_read( struct Hes_Emu* this, hes_addr_t ) ICODE_ATTR;
-void Emu_cpu_write( struct Hes_Emu* this, hes_addr_t, int data ) ICODE_ATTR;
+int Emu_cpu_read( struct Hes_Emu* this, hes_addr_t );
+void Emu_cpu_write( struct Hes_Emu* this, hes_addr_t, int data );
 
 static inline byte const* Emu_cpu_set_mmr( struct Hes_Emu* this, int page, int bank )
 {

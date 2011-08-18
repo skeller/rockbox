@@ -392,12 +392,11 @@ void pcm_rec_init(void)
 /**
  * Initializes recording - call before calling any other recording function
  */
-void audio_init_recording(unsigned int buffer_offset)
+void audio_init_recording(void)
 {
     logf("audio_init_recording");
     queue_send(&pcmrec_queue, PCMREC_INIT, 0);
     logf("audio_init_recording done");
-    (void)buffer_offset;
 } /* audio_init_recording */
 
 /**
@@ -1643,14 +1642,12 @@ void enc_set_parameters(struct enc_parameters *params)
     logf("fnq files:%ld", fnq_size / MAX_PATH);
 
 #if defined(DEBUG)
-    logf("ab :%08lX", (uintptr_t)audiobuf);
     logf("pcm:%08lX", (uintptr_t)pcm_buffer);
     logf("enc:%08lX", (uintptr_t)enc_buffer);
     logf("res:%08lX", (uintptr_t)params->reserve_buffer);
     logf("wip:%08lX", (uintptr_t)wrap_id_p);
     logf("fnq:%08lX", (uintptr_t)fn_queue);
     logf("end:%08lX", (uintptr_t)fn_queue + fnq_size);
-    logf("abe:%08lX", (uintptr_t)audiobufend);
 #endif
 
     /* init all chunk headers and reset indexes */

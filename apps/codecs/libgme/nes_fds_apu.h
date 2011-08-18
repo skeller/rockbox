@@ -48,14 +48,14 @@ struct Nes_Fds_Apu {
 // init
 void Fds_init( struct Nes_Fds_Apu* this );
 // setup
-void Fds_set_tempo( struct Nes_Fds_Apu* this, double t );
+void Fds_set_tempo( struct Nes_Fds_Apu* this, int t );
 	
 // emulation
 void Fds_reset( struct Nes_Fds_Apu* this );
 
-static inline void Fds_volume( struct Nes_Fds_Apu* this, double v )
+static inline void Fds_volume( struct Nes_Fds_Apu* this, int v )
 {
-	Synth_volume( &this->synth, 0.14 / fds_master_vol_max / fds_vol_max / fds_wave_sample_max * v );
+	Synth_volume( &this->synth, (v*14) / 100 / fds_master_vol_max / fds_vol_max / fds_wave_sample_max );
 }
 
 static inline void Fds_set_output( struct Nes_Fds_Apu* this, int i, struct Blip_Buffer* b )
@@ -68,7 +68,7 @@ static inline void Fds_set_output( struct Nes_Fds_Apu* this, int i, struct Blip_
 	this->output_ = b;
 }
 
-void Fds_run_until( struct Nes_Fds_Apu* this, blip_time_t ) ICODE_ATTR;
+void Fds_run_until( struct Nes_Fds_Apu* this, blip_time_t );
 static inline void Fds_end_frame( struct Nes_Fds_Apu* this, blip_time_t end_time )
 {
 	if ( end_time > this->last_time )
@@ -77,7 +77,7 @@ static inline void Fds_end_frame( struct Nes_Fds_Apu* this, blip_time_t end_time
 	assert( this->last_time >= 0 );
 }
 
-void Fds_write_( struct Nes_Fds_Apu* this, unsigned addr, int data ) ICODE_ATTR;
+void Fds_write_( struct Nes_Fds_Apu* this, unsigned addr, int data );
 static inline void Fds_write( struct Nes_Fds_Apu* this, blip_time_t time, unsigned addr, int data )
 {
 	Fds_run_until( this, time );

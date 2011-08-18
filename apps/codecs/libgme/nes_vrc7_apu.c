@@ -15,7 +15,7 @@ void Vrc7_init( struct Nes_Vrc7_Apu* this )
 	this->osc.last_amp = 0;
 	this->mask = 0;
 
-	Vrc7_volume( this, 1.0 );
+	Vrc7_volume( this, (int)FP_ONE_VOLUME );
 	Vrc7_reset( this );
 }
 
@@ -29,7 +29,7 @@ void Vrc7_reset( struct Nes_Vrc7_Apu* this )
 	OPLL_setMask(&this->opll, this->mask);
 }
 
-void Vrc7_set_rate( struct Nes_Vrc7_Apu* this, double r )
+void Vrc7_set_rate( struct Nes_Vrc7_Apu* this, int r )
 {
 	OPLL_set_quality( &this->opll, r < 44100 ? 0 : 1 );
     OPLL_set_rate( &this->opll, (e_uint32)r );

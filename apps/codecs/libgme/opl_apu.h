@@ -36,9 +36,10 @@ struct Opl_Apu {
 };
 
 blargg_err_t Opl_init( struct Opl_Apu* this, long clock, long rate, blip_time_t period, enum opl_type_t type );
+void Opl_shutdown( struct Opl_Apu* this );
 	
 void Opl_reset( struct Opl_Apu* this );
-static inline void Opl_volume( struct Opl_Apu* this, double v ) { Synth_volume( &this->synth, 1.0 / (4096 * 6) * v ); }
+static inline void Opl_volume( struct Opl_Apu* this, int v ) { Synth_volume( &this->synth, v / (4096 * 6) ); }
 	
 static inline void Opl_osc_output( struct Opl_Apu* this, int i, struct Blip_Buffer* buf )
 {
@@ -50,12 +51,12 @@ static inline void Opl_osc_output( struct Opl_Apu* this, int i, struct Blip_Buff
 }
 
 static inline void Opl_set_output( struct Opl_Apu* this, struct Blip_Buffer* buf ) { Opl_osc_output( this, 0, buf ); }
-void Opl_end_frame( struct Opl_Apu* this, blip_time_t ) ICODE_ATTR;
+void Opl_end_frame( struct Opl_Apu* this, blip_time_t );
 
 static inline void Opl_write_addr( struct Opl_Apu* this, int data ) { this->addr = data; }
-void Opl_write_data( struct Opl_Apu* this, blip_time_t, int data ) ICODE_ATTR;
+void Opl_write_data( struct Opl_Apu* this, blip_time_t, int data );
 
-int Opl_read( struct Opl_Apu* this, blip_time_t, int port ) ICODE_ATTR;
+int Opl_read( struct Opl_Apu* this, blip_time_t, int port );
 
 static inline bool Opl_supported( void ) { return true; }
 

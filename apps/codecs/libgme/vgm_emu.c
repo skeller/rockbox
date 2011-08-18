@@ -21,9 +21,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 const char* const gme_wrong_file_type = "Wrong file type for this emulator";
 
-double const fm_gain = 3.0; // FM emulators are internally quieter to avoid 16-bit overflow
-double const rolloff = 0.990;
-double const oversample_factor = 1.5;
+int const fm_gain = 3; // FM emulators are internally quieter to avoid 16-bit overflow
 
 int const silence_max = 6; // seconds
 int const silence_threshold = 0x10;
@@ -53,7 +51,7 @@ enum {
 	ym2612_dac_pan_port = 0xB6
 };
 
-void clear_track_vars( struct Vgm_Emu* this )
+static void clear_track_vars( struct Vgm_Emu* this )
 {
 	this->out_time         = 0;
 	this->emu_time         = 0;
@@ -76,7 +74,7 @@ void Vgm_init( struct Vgm_Emu* this )
 {
 	this->sample_rate = 0;
 	this->mute_mask_ = 0;
-	this->tempo = 1.0;
+	this->tempo = (int)(FP_ONE_TEMPO);
 	
 	// defaults
 	this->max_initial_silence = 2;
@@ -91,8 +89,7 @@ void Vgm_init( struct Vgm_Emu* this )
 	Synth_init( &this->pcm );
 	
 	Buffer_init( &this->buf );
-	Buffer_init( &this->stereo_buf );
-	this->blip_buf = &this->stereo_buf.bufs [0];
+	Blip_init( &this->blip_buf );
 
 	// Init fm chips	
 	Ym2413_init( &this->ym2413 );
@@ -104,7 +101,7 @@ void Vgm_init( struct Vgm_Emu* this )
 
 	// Set sound gain, a value too high
 	// will cause saturation
-	Sound_set_gain(this, 1.0);
+	Sound_set_gain(this, (int)(FP_ONE_GAIN*0.7));
 	
 	// Unload
 	this->voice_count = 0;
@@ -165,7 +162,7 @@ static long check_gd3_header( byte const* h, long remain )
 	return gd3_size;
 }
 
-byte const* gd3_data( struct Vgm_Emu* this, int* size )
+static byte const* gd3_data( struct Vgm_Emu* this, int* size )
 {
 	if ( size )
 		*size = 0;
@@ -205,7 +202,7 @@ static void get_vgm_length( struct header_t const* h, struct track_info_t* out )
 	}
 }
 
-blargg_err_t track_info( struct Vgm_Emu* this, struct track_info_t* out )
+static blargg_err_t track_info( struct Vgm_Emu* this, struct track_info_t* out )
 {
 	memset(out, 0, sizeof out);
 	get_vgm_length( header( this ), out );
@@ -225,7 +222,7 @@ static blargg_err_t check_vgm_header( struct header_t* h )
 	return 0;
 }
 
-void set_voice( struct Vgm_Emu* this, int i, struct Blip_Buffer* c, struct Blip_Buffer* l, struct Blip_Buffer* r )
+static void set_voice( struct Vgm_Emu* this, int i, struct Blip_Buffer* c, struct Blip_Buffer* l, struct Blip_Buffer* r )
 {
 	if ( i < sms_osc_count ) {
 		int j;
@@ -281,14 +278,14 @@ blargg_err_t Vgm_load_mem( struct Vgm_Emu* this, byte const* new_data, long new_
 	if ( !this->psg_rate )
 		this->psg_rate = 3579545;
 	
-	Buffer_clock_rate( &this->stereo_buf, this->psg_rate );
+	Blip_set_clock_rate( &this->blip_buf, this->psg_rate );
 	
 	// Disable FM
 	this->fm_rate = 0;
 	Ym2612_enable( &this->ym2612, false );
 	Ym2413_enable( &this->ym2413, false );
 	
-	Sound_set_tempo( this, 1 );
+	Sound_set_tempo( this, (int)(FP_ONE_TEMPO) );
 	
 	this->voice_count = sms_osc_count;
 	
@@ -310,7 +307,7 @@ blargg_err_t Vgm_load_mem( struct Vgm_Emu* this, byte const* new_data, long new_
 }
 
 void update_fm_rates( struct Vgm_Emu* this, int* ym2413_rate, int* ym2612_rate );
-blargg_err_t init_fm( struct Vgm_Emu* this, double* rate )
+static blargg_err_t init_fm( struct Vgm_Emu* this, int* rate )
 {
 	int ym2612_rate = get_le32( header( this )->ym2612_rate );
 	int ym2413_rate = get_le32( header( this )->ym2413_rate );
@@ -320,14 +317,14 @@ blargg_err_t init_fm( struct Vgm_Emu* this, double* rate )
 	if ( ym2612_rate )
 	{
 		if ( !*rate )
-			*rate = ym2612_rate / 144.0;
+			*rate = ym2612_rate / 144;
 		RETURN_ERR( Ym2612_set_rate( &this->ym2612, *rate, ym2612_rate ) );
 		Ym2612_enable( &this->ym2612, true );
 	}
 	else if ( ym2413_rate )
 	{
 		if ( !*rate )
-			*rate = ym2413_rate / 72.0;
+			*rate = ym2413_rate / 72;
 		int result = Ym2413_set_rate( &this->ym2413, *rate, ym2413_rate );
 		if ( result == 2 )
 			return "YM2413 FM sound not supported";
@@ -342,17 +339,17 @@ blargg_err_t init_fm( struct Vgm_Emu* this, double* rate )
 
 blargg_err_t setup_fm( struct Vgm_Emu* this )
 {
-	double fm_rate = 0.0;
+	int fm_rate = 0;
 	if ( !this->disable_oversampling )
-		this->fm_rate = this->sample_rate * oversample_factor;
+		fm_rate = (this->sample_rate * 3) / 2; // oversample factor = 1.5
 	RETURN_ERR( init_fm( this, &fm_rate ) );
 	
 	if ( uses_fm( this ) )
 	{
 		this->voice_count = 8;
-		RETURN_ERR( Resampler_setup( &this->resampler, fm_rate / this->sample_rate, rolloff, fm_gain * this->gain ) );
-		RETURN_ERR( Resampler_reset( &this->resampler, Buffer_length( &this->stereo_buf ) * this->sample_rate / 1000 ) );
-		Sms_apu_volume( &this->psg, 0.195 * fm_gain * this->gain );
+		RETURN_ERR( Resampler_setup( &this->resampler, fm_rate, fm_gain, this->sample_rate, this->gain ) );
+		RETURN_ERR( Resampler_reset( &this->resampler, Blip_length( &this->blip_buf ) * this->sample_rate / 1000 ) );
+		Sms_apu_volume( &this->psg, ((this->gain/5)-(this->gain*5)/1000) * fm_gain );
 	}
 	else
 	{
@@ -365,7 +362,7 @@ blargg_err_t setup_fm( struct Vgm_Emu* this )
 // Emulation
 
 blip_time_t run( struct Vgm_Emu* this, vgm_time_t end_time );
-blargg_err_t run_clocks( struct Vgm_Emu* this, blip_time_t* time_io, int msec )
+static blargg_err_t run_clocks( struct Vgm_Emu* this, blip_time_t* time_io, int msec )
 {
 	*time_io = run( this, msec * this->vgm_rate / 1000 );
 	Sms_apu_end_frame( &this->psg, *time_io );
@@ -374,7 +371,7 @@ blargg_err_t run_clocks( struct Vgm_Emu* this, blip_time_t* time_io, int msec )
 
 
 
-blargg_err_t play_( struct Vgm_Emu* this, long count, sample_t* out )
+static blargg_err_t play_( struct Vgm_Emu* this, long count, sample_t* out )
 {
 	if ( !uses_fm( this ) ) {
 		long remain = count;
@@ -401,15 +398,15 @@ blargg_err_t play_( struct Vgm_Emu* this, long count, sample_t* out )
 		return 0;
 	}
 		
-	Resampler_play( &this->resampler, count, out, &this->stereo_buf );
+	Resampler_play( &this->resampler, count, out, &this->blip_buf );
 	return 0;
 }
 
 // Vgm_Emu_impl
 
-inline int command_len( int command )
+static inline int command_len( int command )
 {
-	static byte const lens [0x10] ICONST_ATTR = {
+	static byte const lens [0x10] = {
 	// 0 1 2 3 4 5 6 7 8 9 A B C D E F
 	   1,1,1,2,2,3,1,1,1,1,3,3,4,4,5,5
 	};
@@ -418,31 +415,28 @@ inline int command_len( int command )
 	return len;
 }
 	
-inline fm_time_t to_fm_time( struct Vgm_Emu* this, vgm_time_t t )
+static inline fm_time_t to_fm_time( struct Vgm_Emu* this, vgm_time_t t )
 {
 	return (t * this->fm_time_factor + this->fm_time_offset) >> fm_time_bits;
 }
 
-inline blip_time_t to_psg_time( struct Vgm_Emu* this, vgm_time_t t )
+static inline blip_time_t to_psg_time( struct Vgm_Emu* this, vgm_time_t t )
 {
 	return (t * this->blip_time_factor) >> blip_time_bits;
 }
 
-void write_pcm( struct Vgm_Emu* this, vgm_time_t vgm_time, int amp )
+static void write_pcm( struct Vgm_Emu* this, vgm_time_t vgm_time, int amp )
 {
-	if ( this->blip_buf )
-	{
-		check( amp >= 0 );
-		blip_time_t blip_time = to_psg_time( this, vgm_time );
-		int old = this->dac_amp;
-		int delta = amp - old;
-		this->dac_amp = amp;
-		Blip_set_modified( this->blip_buf );
-		if ( old >= 0 ) // first write is ignored, to avoid click
-			Synth_offset_inline( &this->pcm, blip_time, delta, this->blip_buf );
-		else
-			this->dac_amp |= this->dac_disabled;
-	}
+	check( amp >= 0 );
+	blip_time_t blip_time = to_psg_time( this, vgm_time );
+	int old = this->dac_amp;
+	int delta = amp - old;
+	this->dac_amp = amp;
+	Blip_set_modified( &this->blip_buf );
+	if ( old >= 0 ) // first write is ignored, to avoid click
+		Synth_offset_inline( &this->pcm, blip_time, delta, &this->blip_buf );
+	else
+		this->dac_amp |= this->dac_disabled;
 }
 
 blip_time_t run( struct Vgm_Emu* this, vgm_time_t end_time )
@@ -516,22 +510,7 @@ blip_time_t run( struct Vgm_Emu* this, vgm_time_t end_time )
 		
 		case cmd_ym2612_port1:
 			if ( Ym2612_run_until( &this->ym2612, to_fm_time( this, vgm_time ) ) )
-			{
-				if ( pos [0] == ym2612_dac_pan_port )
-				{
-					struct Blip_Buffer* blip_buf = NULL;
-					switch ( pos [1] >> 6 )
-					{
-					case 0: blip_buf = NULL; break;
-					case 1: blip_buf = &this->stereo_buf.bufs [2]; break;
-					case 2: blip_buf = &this->stereo_buf.bufs [1]; break;
-					case 3: blip_buf = &this->stereo_buf.bufs [0]; break;
-					}
-					this->blip_buf = blip_buf;
-				}
-			
 				Ym2612_write1( &this->ym2612, pos [0], pos [1] );
-			}
 			pos += 2;
 			break;
 			
@@ -666,7 +645,7 @@ void update_fm_rates( struct Vgm_Emu* this, int* ym2413_rate, int* ym2612_rate )
 blargg_err_t Vgm_set_sample_rate( struct Vgm_Emu* this, long rate )
 {
 	require( !this->sample_rate ); // sample rate can't be changed once set
-	RETURN_ERR( Buffer_set_sample_rate( &this->stereo_buf, rate, 1000 / 30 ) );
+	RETURN_ERR( Blip_set_sample_rate( &this->blip_buf, rate, 1000 / 30 ) );
 	RETURN_ERR( Buffer_set_sample_rate( &this->buf, rate, 1000 / 20 ) );
 	
 	// Set bass frequency
@@ -714,10 +693,10 @@ void Sound_mute_voices( struct Vgm_Emu* this, int mask )
 	if ( uses_fm( this ) )
 	{
 		for ( i = sms_osc_count; --i >= 0; )
-			Sms_apu_set_output( &this->psg, i, ( mask & 0x80 ) ? 0 : &this->stereo_buf.bufs [0], NULL, NULL );
+			Sms_apu_set_output( &this->psg, i, ( mask & 0x80 ) ? 0 : &this->blip_buf, NULL, NULL );
 		if ( Ym2612_enabled( &this->ym2612 ) )
 		{
-			Synth_volume( &this->pcm, (mask & 0x40) ? 0.0 : 0.1115 / 256 * fm_gain * this->gain );
+			Synth_volume( &this->pcm, (mask & 0x40) ? 0 : (int)((long long)(0.1115*FP_ONE_VOLUME) / 256 * fm_gain * this->gain / FP_ONE_VOLUME) );
 			Ym2612_mute_voices( &this->ym2612, mask );
 		}
 		
@@ -733,27 +712,26 @@ void Sound_mute_voices( struct Vgm_Emu* this, int mask )
 	}
 }
 
-void Sound_set_tempo( struct Vgm_Emu* this, double t )
+void Sound_set_tempo( struct Vgm_Emu* this, int t )
 {
 	require( this->sample_rate ); // sample rate must be set first
-	double const min = 0.02;
-	double const max = 4.00;
+	int const min = (int)(FP_ONE_TEMPO*0.02);
+	int const max = (int)(FP_ONE_TEMPO*4.00);
 	if ( t < min ) t = min;
 	if ( t > max ) t = max;
 	this->tempo = t;
 	
 	if ( this->file_begin )
 	{
-		this->vgm_rate = (long) (44100 * t + 0.5);
-		this->blip_time_factor = (int) ((double)
-				(1 << blip_time_bits) / this->vgm_rate * Blip_clock_rate( &this->stereo_buf.bufs [0] ) + 0.5);
+		this->vgm_rate = (long) ((44100LL * t) / FP_ONE_TEMPO);
+		this->blip_time_factor = (int) (((1LL << blip_time_bits) * Blip_clock_rate( &this->blip_buf )) / this->vgm_rate);
 		//debug_printf( "blip_time_factor: %ld\n", blip_time_factor );
 		//debug_printf( "vgm_rate: %ld\n", vgm_rate );
 		// TODO: remove? calculates vgm_rate more accurately (above differs at most by one Hz only)
 		//blip_time_factor = (long) floor( double (1L << blip_time_bits) * psg_rate / 44100 / t + 0.5 );
 		//vgm_rate = (long) floor( double (1L << blip_time_bits) * psg_rate / blip_time_factor + 0.5 );
 		
-		this->fm_time_factor = 2 + (int) (this->fm_rate * (1 << fm_time_bits) / this->vgm_rate + 0.5);
+		this->fm_time_factor = 2 + (int) ((this->fm_rate * (1LL << fm_time_bits)) / this->vgm_rate);
 	}
 }
 
@@ -763,8 +741,6 @@ blargg_err_t Vgm_start_track( struct Vgm_Emu* this )
 	clear_track_vars( this );
 	
 	Sms_apu_reset( &this->psg, get_le16( header( this )->noise_feedback ), header( this )->noise_width );
-	
-	this->blip_buf = &this->stereo_buf.bufs [0];
 	
 	this->dac_disabled = -1;
 	this->pos          = this->file_begin + header_size;
@@ -788,7 +764,7 @@ blargg_err_t Vgm_start_track( struct Vgm_Emu* this )
 		if ( Ym2612_enabled( &this->ym2612 ) )
 			Ym2612_reset( &this->ym2612 );
 		
-		Buffer_clear( &this->stereo_buf );
+		Blip_clear( &this->blip_buf, 1 );
 		Resampler_clear( &this->resampler );
 	}
 	
@@ -821,7 +797,7 @@ blargg_err_t Vgm_start_track( struct Vgm_Emu* this )
 
 // Tell/Seek
 
-blargg_long msec_to_samples( blargg_long msec, long sample_rate )
+static blargg_long msec_to_samples( blargg_long msec, long sample_rate )
 {
 	blargg_long sec = msec / 1000;
 	msec -= sec * 1000;
@@ -917,7 +893,7 @@ static int int_log( blargg_long x, int step, int unit )
 	return ((unit - fraction) + (fraction >> 1)) >> shift;
 }
 
-void handle_fade( struct Vgm_Emu* this, long out_count, sample_t* out )
+static void handle_fade( struct Vgm_Emu* this, long out_count, sample_t* out )
 {
 	int i;
 	for ( i = 0; i < out_count; i += fade_block_size )
@@ -941,7 +917,7 @@ void handle_fade( struct Vgm_Emu* this, long out_count, sample_t* out )
 
 // Silence detection
 
-void emu_play( struct Vgm_Emu* this, long count, sample_t* out )
+static void emu_play( struct Vgm_Emu* this, long count, sample_t* out )
 {
 	this->emu_time += count;
 	if ( !this->emu_track_ended_ ) {

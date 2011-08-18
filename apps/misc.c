@@ -34,7 +34,6 @@
 #include "lang.h"
 #include "dir.h"
 #include "lcd-remote.h"
-#include "system.h"
 #include "timefuncs.h"
 #include "screens.h"
 #include "usb_screen.h"
@@ -240,7 +239,6 @@ bool settings_parseline(char* line, char** name, char** value)
 
 static void system_flush(void)
 {
-    scrobbler_shutdown();
     playlist_shutdown();
     tree_flush();
     call_storage_idle_notifys(true); /*doesnt work on usb and shutdown from ata thread */
@@ -249,7 +247,6 @@ static void system_flush(void)
 static void system_restore(void)
 {
     tree_restore();
-    scrobbler_init();
 }
 
 static bool clean_shutdown(void (*callback)(void *), void *parameter)
@@ -622,7 +619,9 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
         case SYS_VOLUME_CHANGED:
         {
             static bool firstvolume = true;
-            int volume = hosted_get_volume();
+            /* kludge: since this events go to the button_queue,
+             * event data is available in the last button data */
+            int volume = button_get_data();
             DEBUGF("SYS_VOLUME_CHANGED: %d\n", volume);
             if (global_settings.volume != volume) {
                 global_settings.volume = volume;
@@ -765,7 +764,10 @@ void check_bootfile(bool do_rolo)
                     static const struct text_message message={ lines, 2 };
                     button_clear_queue(); /* Empty the keyboard buffer */
                     if(gui_syncyesno_run(&message, NULL, NULL) == YESNO_YES)
+                    {
+                        audio_hard_stop();
                         rolo_load(BOOTDIR "/" BOOTFILE);
+                    }
                 }
             }
             wrtdate = info.wrtdate;

@@ -65,8 +65,8 @@ struct Ay_Emu {
 	int max_initial_silence;
 	int voice_count;
 	int mute_mask_;
-	double tempo;
-	double gain;
+	int tempo;
+	int gain;
 	
 	long sample_rate;
 	
@@ -141,7 +141,7 @@ long Track_get_length( struct Ay_Emu* this, int n );
 
 // Adjust song tempo, where 1.0 = normal, 0.5 = half speed, 2.0 = double speed.
 // Track length as returned by track_info() assumes a tempo of 1.0.
-void Sound_set_tempo( struct Ay_Emu* this, double t );
+void Sound_set_tempo( struct Ay_Emu* this, int t );
 	
 // Mute/unmute voice i, where voice 0 is first voice
 void Sound_mute_voice( struct Ay_Emu* this, int index, bool mute );
@@ -152,7 +152,7 @@ void Sound_mute_voices( struct Ay_Emu* this, int mask );
 
 // Change overall output amplitude, where 1.0 results in minimal clamping.
 // Must be called before set_sample_rate().
-static inline void Sound_set_gain( struct Ay_Emu* this, double g )
+static inline void Sound_set_gain( struct Ay_Emu* this, int g )
 {
 	assert( !this->sample_rate ); // you must set gain before setting sample rate
 	this->gain = g;

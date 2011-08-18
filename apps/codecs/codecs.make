@@ -50,10 +50,71 @@ include $(APPSDIR)/codecs/libgme/libnsf.make
 include $(APPSDIR)/codecs/libgme/libsgc.make
 include $(APPSDIR)/codecs/libgme/libvgm.make
 include $(APPSDIR)/codecs/libgme/libkss.make
+include $(APPSDIR)/codecs/libgme/libemu2413.make
 
 # compile flags for codecs
 CODECFLAGS = $(CFLAGS) -fstrict-aliasing -I$(APPSDIR)/codecs \
 	-I$(APPSDIR)/codecs/lib -DCODEC
+
+# set CODECFLAGS per codec lib, since gcc takes the last -Ox and the last
+# in a -ffoo -fno-foo pair, there is no need to filter them out
+$(A52LIB) : CODECFLAGS += -O1
+$(ALACLIB) : CODECFLAGS += -O1
+$(ASAPLIB) : CODECFLAGS += -O1
+$(ASFLIB) : CODECFLAGS += -O2
+$(ATRACLIB) : CODECFLAGS += -O1
+$(AYLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(COOKLIB): CODECFLAGS += -O1
+$(DEMACLIB) : CODECFLAGS += -O3
+$(FAADLIB) : CODECFLAGS += -O2
+$(FFMPEGFLACLIB) : CODECFLAGS += -O2
+$(GBSLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(HESLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(KSSLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(M4ALIB) : CODECFLAGS += -O3
+$(MUSEPACKLIB) : CODECFLAGS += -O1
+$(NSFLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(PCMSLIB) : CODECFLAGS += -O1
+$(RMLIB) : CODECFLAGS += -O3
+$(SGCLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(SPCLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+$(TREMORLIB) : CODECFLAGS += -O2
+$(TTALIB) : CODECFLAGS += -O2
+$(VGMLIB) : CODECFLAGS += -fno-strict-aliasing -O2
+$(EMU2413LIB) : CODECFLAGS += -fno-strict-aliasing -O3
+$(WAVPACKLIB) : CODECFLAGS += -O1
+$(WMALIB) : CODECFLAGS += -O2
+$(WMAPROLIB) : CODECFLAGS += -O1
+$(WMAVOICELIB) : CODECFLAGS += -O1
+
+# fine-tuning of CODECFLAGS per cpu arch
+ifeq ($(CPU),arm)
+  # redo per arm generation
+  $(ALACLIB) : CODECFLAGS += -O2
+  $(AYLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(GBSLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(HESLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(KSSLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(NSFLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(SGCLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(VGMLIB) : CODECFLAGS += -fno-strict-aliasing -O1
+  $(EMU2413LIB) : CODECFLAGS += -fno-strict-aliasing -O3
+  $(WAVPACKLIB) : CODECFLAGS += -O3
+else ifeq ($(CPU),coldfire)
+  $(A52LIB) : CODECFLAGS += -O2
+  $(ASFLIB) : CODECFLAGS += -O3
+  $(ATRACLIB) : CODECFLAGS += -O2
+  $(COOKLIB): CODECFLAGS += -O2
+  $(DEMACLIB) : CODECFLAGS += -O2
+  $(TREMORLIB) : CODECFLAGS += -O3
+  $(WMAPROLIB) : CODECFLAGS += -O3
+  $(WMAVOICELIB) : CODECFLAGS += -O2
+endif
+
+ifeq ($(MEMORYSIZE),2)
+  $(ASFLIB) : CODECFLAGS += -Os
+  $(WMALIB) : CODECFLAGS += -Os
+endif
 
 ifndef APP_TYPE
   CONFIGFILE := $(FIRMDIR)/export/config/$(MODELNAME).h
@@ -103,10 +164,10 @@ $(CODECDIR)/tta.codec : $(CODECDIR)/libtta.a
 $(CODECDIR)/ay.codec : $(CODECDIR)/libay.a
 $(CODECDIR)/gbs.codec : $(CODECDIR)/libgbs.a
 $(CODECDIR)/hes.codec : $(CODECDIR)/libhes.a
-$(CODECDIR)/nsf.codec : $(CODECDIR)/libnsf.a
-$(CODECDIR)/sgc.codec : $(CODECDIR)/libsgc.a
-$(CODECDIR)/vgm.codec : $(CODECDIR)/libvgm.a
-$(CODECDIR)/kss.codec : $(CODECDIR)/libkss.a
+$(CODECDIR)/nsf.codec : $(CODECDIR)/libnsf.a $(CODECDIR)/libemu2413.a
+$(CODECDIR)/sgc.codec : $(CODECDIR)/libsgc.a $(CODECDIR)/libemu2413.a
+$(CODECDIR)/vgm.codec : $(CODECDIR)/libvgm.a $(CODECDIR)/libemu2413.a
+$(CODECDIR)/kss.codec : $(CODECDIR)/libkss.a $(CODECDIR)/libemu2413.a
 
 $(CODECS): $(CODECLIB) # this must be last in codec dependency list
 

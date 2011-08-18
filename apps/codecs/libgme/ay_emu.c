@@ -35,7 +35,7 @@ int const spectrum_period = 70908;
 
 int const cpc_clock = 2000000;
 
-void clear_track_vars( struct Ay_Emu *this )
+static void clear_track_vars( struct Ay_Emu *this )
 {
 	this->current_track    = -1;
 	this->out_time         = 0;
@@ -54,8 +54,8 @@ void Ay_init( struct Ay_Emu *this )
 {
 	this->sample_rate  = 0;
 	this->mute_mask_   = 0;
-	this->tempo        = 1.0;
-	this->gain         = 1.0;
+	this->tempo        = (int)FP_ONE_TEMPO;
+	this->gain         = (int)FP_ONE_GAIN;
 	this->track_count  = 0;
 	
 	// defaults
@@ -128,7 +128,7 @@ long Track_get_length( struct Ay_Emu* this, int n )
 
 // Setup
 
-void change_clock_rate( struct Ay_Emu *this, long rate )
+static void change_clock_rate( struct Ay_Emu *this, long rate )
 {
 	this->clock_rate_ = rate;
 	Buffer_clock_rate( &this->stereo_buf, rate );
@@ -144,7 +144,7 @@ blargg_err_t Ay_load_mem( struct Ay_Emu *this, byte const in [], int size )
 		warning( "Unknown file version" ); */
 	
 	this->voice_count = ay_osc_count + 1; // +1 for beeper
-	Ay_apu_volume( &this->apu, this->gain );
+	Ay_apu_volume( &this->apu, this->gain);
 	
 	// Setup buffer
 	change_clock_rate( this, spectrum_clock );
@@ -160,7 +160,7 @@ blargg_err_t Ay_load_mem( struct Ay_Emu *this, byte const in [], int size )
 	return 0;
 }
 
-void set_beeper_output( struct Ay_Emu *this, struct Blip_Buffer* b )
+static void set_beeper_output( struct Ay_Emu *this, struct Blip_Buffer* b )
 {
 	this->beeper_output = b;
 	if ( b && !this->cpc_mode )
@@ -169,7 +169,7 @@ void set_beeper_output( struct Ay_Emu *this, struct Blip_Buffer* b )
 		disable_beeper( this );
 }
 
-void set_voice( struct Ay_Emu *this, int i, struct Blip_Buffer* center )
+static void set_voice( struct Ay_Emu *this, int i, struct Blip_Buffer* center )
 {
 	if ( i >= ay_osc_count )
 		set_beeper_output( this, center );
@@ -177,7 +177,7 @@ void set_voice( struct Ay_Emu *this, int i, struct Blip_Buffer* center )
 		Ay_apu_set_output( &this->apu, i, center );
 }
 
-blargg_err_t run_clocks( struct Ay_Emu *this, blip_time_t* duration, int msec )
+static blargg_err_t run_clocks( struct Ay_Emu *this, blip_time_t* duration, int msec )
 {
 #if defined(ROCKBOX)
 	(void) msec;
@@ -343,11 +343,11 @@ void Sound_mute_voices( struct Ay_Emu *this, int mask )
 	}
 }
 
-void Sound_set_tempo( struct Ay_Emu *this, double t )
+void Sound_set_tempo( struct Ay_Emu *this, int t )
 {
 	require( this->sample_rate ); // sample rate must be set first
-	double const min = 0.02;
-	double const max = 4.00;
+	int const min = (int)(FP_ONE_TEMPO*0.02);
+	int const max = (int)(FP_ONE_TEMPO*4.00);
 	if ( t < min ) t = min;
 	if ( t > max ) t = max;
 	this->tempo = t;
@@ -356,10 +356,10 @@ void Sound_set_tempo( struct Ay_Emu *this, double t )
 	if ( this->clock_rate_ != spectrum_clock )
 		p = this->clock_rate_ / 50;
 	
-	this->play_period = (blip_time_t) (p / t);
+	this->play_period = (blip_time_t) ((p * FP_ONE_TEMPO) / t);
 }
 
-void fill_buf( struct Ay_Emu *this ) ICODE_ATTR;;
+void fill_buf( struct Ay_Emu *this );;
 blargg_err_t Ay_start_track( struct Ay_Emu *this, int track )
 {
 	clear_track_vars( this );
@@ -483,7 +483,7 @@ blargg_err_t Ay_start_track( struct Ay_Emu *this, int track )
 	Z80_map_mem( &this->cpu, 0, mem_size, this->mem.ram, this->mem.ram );
 	this->cpu.r = r;
 	
-	this->beeper_delta   = (int) (ay_amp_range * 0.8);
+	this->beeper_delta   = (int) ((ay_amp_range*4)/5);
 	this->last_beeper    = 0;
 	this->next_play      = this->play_period;
 	this->spectrum_mode  = false;
@@ -521,7 +521,7 @@ blargg_err_t Ay_start_track( struct Ay_Emu *this, int track )
 
 // Tell/Seek
 
-blargg_long msec_to_samples( blargg_long msec, long sample_rate )
+static blargg_long msec_to_samples( blargg_long msec, long sample_rate )
 {
 	blargg_long sec = msec / 1000;
 	msec -= sec * 1000;
@@ -543,8 +543,8 @@ blargg_err_t Track_seek( struct Ay_Emu *this, long msec )
 	return Track_skip( this, time - this->out_time );
 }
 
-blargg_err_t play_( struct Ay_Emu *this, long count, sample_t* out ) ICODE_ATTR;
-blargg_err_t skip_( struct Ay_Emu *this, long count )
+blargg_err_t play_( struct Ay_Emu *this, long count, sample_t* out );
+static blargg_err_t skip_( struct Ay_Emu *this, long count )
 {
 	// for long skip, mute sound
 	const long threshold = 30000;
@@ -620,7 +620,7 @@ static int int_log( blargg_long x, int step, int unit )
 	return ((unit - fraction) + (fraction >> 1)) >> shift;
 }
 
-void handle_fade( struct Ay_Emu *this, long out_count, sample_t* out )
+static void handle_fade( struct Ay_Emu *this, long out_count, sample_t* out )
 {
 	int i;
 	for ( i = 0; i < out_count; i += fade_block_size )
@@ -644,7 +644,7 @@ void handle_fade( struct Ay_Emu *this, long out_count, sample_t* out )
 
 // Silence detection
 
-void emu_play( struct Ay_Emu *this, long count, sample_t* out )
+static void emu_play( struct Ay_Emu *this, long count, sample_t* out )
 {
 	check( current_track_ >= 0 );
 	this->emu_time += count;

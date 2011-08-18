@@ -36,7 +36,12 @@ static unsigned int dphaseARTable[16][16];
 /** Phase incr table for Decay and Release. */
 static unsigned int dphaseDRTable[16][16];
 /** KSL + TL Table. */
-static int tllTable[16][8][1<<TL_BITS][4];
+#if !defined(ROCKBOX)
+static unsigned char tllTable[16][8][1<<TL_BITS][4];
+#else
+/* Use the table calculated in emu2413 which is identical. */
+extern unsigned char tllTable[16][8][1<<TL_BITS][4];
+#endif
 static int rksTable[2][8][2];
 /** Since we wont change clock rate in rockbox we can
     skip this table */
@@ -133,7 +138,7 @@ static void makeSinTable(void)
 		sintable[PG_WIDTH/2 + i] = 2*DB_MUTE + sintable[i];
 }
 
-void makeDphaseNoiseTable(int sampleRate, int clockRate)
+static void makeDphaseNoiseTable(int sampleRate, int clockRate)
 {
 	for (int i=0; i<1024; i++)
 		for (int j=0; j<8; j++)
@@ -141,7 +146,7 @@ void makeDphaseNoiseTable(int sampleRate, int clockRate)
 }
 
 // Table for Pitch Modulator 
-void makePmTable(void)
+static void makePmTable(void)
 {
 	int i;
 	for (i=0; i < PM_PG_WIDTH; i++)
@@ -159,7 +164,7 @@ void makePmTable(void)
 }
 
 // Table for Amp Modulator 
-void makeAmTable(void)
+static void makeAmTable(void)
 {
 	int i;
 	for (i=0; i<AM_PG_WIDTH; i++)
@@ -193,6 +198,7 @@ static void makeDphaseTable(int sampleRate, int clockRate)
 }
 #endif
 
+#if !defined(ROCKBOX)
 static void makeTllTable(void)
 {
 	#define dB2(x) (int)((x)*2)
@@ -209,17 +215,17 @@ static void makeTllTable(void)
 			for (TL=0; TL<64; TL++)
 				for (KL=0; KL<4; KL++) {
 					if (KL==0) {
-						tllTable[fnum][block][TL][KL] = ALIGN(TL, TL_STEP, EG_STEP);
+						tllTable[fnum][block][TL][KL] = (ALIGN(TL, TL_STEP, EG_STEP) ) >> 1;
 					} else {
 						int tmp = kltable[fnum] - dB2(3.000) * (7 - block);
 						if (tmp <= 0)
-							tllTable[fnum][block][TL][KL] = ALIGN(TL, TL_STEP, EG_STEP);
+							tllTable[fnum][block][TL][KL] = (ALIGN(TL, TL_STEP, EG_STEP) ) >> 1;
 						else 
-							tllTable[fnum][block][TL][KL] = (int)((tmp>>(3-KL))/EG_STEP) + ALIGN(TL, TL_STEP, EG_STEP);
+							tllTable[fnum][block][TL][KL] = ((int)((tmp>>(3-KL))/EG_STEP) + ALIGN(TL, TL_STEP, EG_STEP) ) >> 1;
 					}
 				}
 }
-
+#endif
 
 // Rate Table for Attack 
 static void makeDphaseARTable(int sampleRate, int clockRate)
@@ -313,7 +319,7 @@ static inline void slotUpdatePG(struct Slot* slot)
 
 static inline void slotUpdateTLL(struct Slot* slot)
 {
-	slot->tll = tllTable[slot->fnum>>6][slot->block][slot->patch.TL][slot->patch.KL];
+	slot->tll = (int)(tllTable[slot->fnum>>6][slot->block][slot->patch.TL][slot->patch.KL]) << 1;
 }
 
 static inline void slotUpdateRKS(struct Slot* slot)
@@ -457,7 +463,9 @@ void OPL_init(struct Y8950* this, byte* ramBank, int sampleRam)
 	
 	makeAdjustTable();
 	makeDB2LinTable();
+#if !defined(ROCKBOX)
 	makeTllTable();
+#endif
 	makeRksTable();
 	makeSinTable();
 
@@ -549,7 +557,7 @@ static inline void keyOff_TOM(struct Y8950* this){ slotOff(&this->ch[8].mod); }
 static inline void keyOff_CYM(struct Y8950* this){ slotOff(&this->ch[8].car); }
 
 // Change Rhythm Mode
-inline void setRythmMode(struct Y8950* this, int data)
+static inline void setRythmMode(struct Y8950* this, int data)
 {
 	bool newMode = (data & 32) != 0;
 	if (this->rythm_mode != newMode) {
@@ -822,7 +830,7 @@ static inline int calcSample(struct Y8950* this, int channelMask)
 	return (mix*this->maxVolume) >> (DB2LIN_AMP_BITS - 1);
 }
 
-bool checkMuteHelper(struct Y8950* this)
+static bool checkMuteHelper(struct Y8950* this)
 {
 	int i;
 	struct OPLChannel *ch = this->ch;	
@@ -844,7 +852,7 @@ bool checkMuteHelper(struct Y8950* this)
 	return ADPCM_muted(&this->adpcm);
 }
 
-void checkMute(struct Y8950* this)
+static void checkMute(struct Y8950* this)
 {
 	bool mute = checkMuteHelper(this);
 	//PRT_DEBUG("Y8950: muted " << mute);

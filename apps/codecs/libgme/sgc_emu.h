@@ -66,8 +66,8 @@ struct Sgc_Emu {
 	// general
 	int voice_count;
 	int mute_mask_;
-	double tempo;
-	double gain;
+	int tempo;
+	int gain;
 	
 	long sample_rate;
 	
@@ -166,7 +166,7 @@ static inline long Track_get_length( struct Sgc_Emu* this, int n )
 
 // Adjust song tempo, where 1.0 = normal, 0.5 = half speed, 2.0 = double speed.
 // Track length as returned by track_info() assumes a tempo of 1.0.
-void Sound_set_tempo( struct Sgc_Emu* this, double t );
+void Sound_set_tempo( struct Sgc_Emu* this, int t );
 
 // Mute/unmute voice i, where voice 0 is first voice
 void Sound_mute_voice( struct Sgc_Emu* this, int index, bool mute );
@@ -177,7 +177,7 @@ void Sound_mute_voices( struct Sgc_Emu* this, int mask );
 
 // Change overall output amplitude, where 1.0 results in minimal clamping.
 // Must be called before set_sample_rate().
-static inline void Sound_set_gain( struct Sgc_Emu* this, double g )
+static inline void Sound_set_gain( struct Sgc_Emu* this, int g )
 {
 	assert( !this->sample_rate ); // you must set gain before setting sample rate
 	this->gain = g;
@@ -191,9 +191,9 @@ static inline bool sega_mapping( struct Sgc_Emu* this )
 
 // Emulation (You shouldn't touch these)
 
-bool run_cpu( struct Sgc_Emu* this, cpu_time_t end_time ) ICODE_ATTR;
-void cpu_out( struct Sgc_Emu* this, cpu_time_t time, addr_t addr, int data ) ICODE_ATTR;
-void cpu_write( struct Sgc_Emu* this, addr_t addr, int data ) ICODE_ATTR;
-void jsr( struct Sgc_Emu* this, byte addr [2] ) ICODE_ATTR;
+bool run_cpu( struct Sgc_Emu* this, cpu_time_t end_time );
+void cpu_out( struct Sgc_Emu* this, cpu_time_t time, addr_t addr, int data );
+void cpu_write( struct Sgc_Emu* this, addr_t addr, int data );
+void jsr( struct Sgc_Emu* this, byte addr [2] );
 
 #endif

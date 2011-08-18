@@ -12,7 +12,6 @@
 #include "ym2612_emu.h"
 #include "sms_apu.h"
 
-typedef short sample_t;
 typedef int vgm_time_t;
 typedef int fm_time_t;
 
@@ -63,7 +62,7 @@ struct track_info_t
 // aliasing on high notes. Currently YM2413 support requires that you supply a
 // YM2413 sound chip emulator. I can provide one I've modified to work with the library.
 struct Vgm_Emu {
-	double fm_rate;
+	int fm_rate;
 	long psg_rate;
 	long vgm_rate;
 	bool disable_oversampling;
@@ -85,7 +84,7 @@ struct Vgm_Emu {
 	int dac_amp;
 	int dac_disabled; // -1 if disabled
 
-	struct Blip_Buffer* blip_buf;
+	struct Blip_Buffer blip_buf;
 
 	// general
 	long clock_rate_;
@@ -93,8 +92,8 @@ struct Vgm_Emu {
 	int max_initial_silence;
 	int voice_count;
 	int mute_mask_;
-	double tempo;
-	double gain;
+	int tempo;
+	int gain;
 	
 	long sample_rate;
 	
@@ -124,10 +123,7 @@ struct Vgm_Emu {
 	
 	struct Sms_Apu psg;
 	struct Blip_Synth pcm;
-	struct Stereo_Buffer stereo_buf;
-	
 	struct Resampler resampler;
-	
 	struct Stereo_Buffer buf;
 };
 
@@ -155,7 +151,7 @@ blargg_err_t Vgm_start_track( struct Vgm_Emu* this );
 	
 // Generate 'count' samples info 'buf'. Output is in stereo. Any emulation
 // errors set warning string, and major errors also end track.
-blargg_err_t Vgm_play( struct Vgm_Emu* this, long count, sample_t* buf ) ICODE_ATTR;
+blargg_err_t Vgm_play( struct Vgm_Emu* this, long count, sample_t* buf );
 		
 // Track status/control
 
@@ -190,7 +186,7 @@ static inline long Track_get_length( struct Vgm_Emu* this )
 	
 // Adjust song tempo, where 1.0 = normal, 0.5 = half speed, 2.0 = double speed.
 // Track length as returned by track_info() assumes a tempo of 1.0.
-void Sound_set_tempo( struct Vgm_Emu* this, double t );
+void Sound_set_tempo( struct Vgm_Emu* this, int t );
 	
 // Mute/unmute voice i, where voice 0 is first voice
 void Sound_mute_voice( struct Vgm_Emu* this, int index, bool mute );
@@ -201,7 +197,7 @@ void Sound_mute_voices( struct Vgm_Emu* this, int mask );
 	
 // Change overall output amplitude, where 1.0 results in minimal clamping.
 // Must be called before set_sample_rate().
-static inline void Sound_set_gain( struct Vgm_Emu* this, double g )
+static inline void Sound_set_gain( struct Vgm_Emu* this, int g )
 {
 	assert( !this->sample_rate ); // you must set gain before setting sample rate
 	this->gain = g;

@@ -8,13 +8,13 @@ void Fm_apu_create( struct Sms_Fm_Apu* this )
 	Ym2413_init( &this->apu );
 }
 
-blargg_err_t Fm_apu_init( struct Sms_Fm_Apu* this, double clock_rate, double sample_rate )
+blargg_err_t Fm_apu_init( struct Sms_Fm_Apu* this, int clock_rate, int sample_rate )
 {
-	this->period_ = (blip_time_t) (clock_rate / sample_rate + 0.5);
+	this->period_ = (blip_time_t) (clock_rate / sample_rate);
 	CHECK_ALLOC( !Ym2413_set_rate( &this->apu, sample_rate, clock_rate ) );
 	
 	Fm_apu_set_output( this, 0 );
-	Fm_apu_volume( this, 1.0 );
+	Fm_apu_volume( this, (int)FP_ONE_VOLUME );
 	Fm_apu_reset( this );
 	return 0;
 }
@@ -28,7 +28,7 @@ void Fm_apu_reset( struct Sms_Fm_Apu* this )
 	Ym2413_reset( &this->apu );
 }
 
-void fm_run_until( struct Sms_Fm_Apu* this, blip_time_t end_time ) ICODE_ATTR;
+void fm_run_until( struct Sms_Fm_Apu* this, blip_time_t end_time );
 void Fm_apu_write_data( struct Sms_Fm_Apu* this, blip_time_t time, int data )
 {
 	if ( time > this->next_time )

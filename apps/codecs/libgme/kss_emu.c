@@ -27,7 +27,7 @@ int const silence_threshold = 0x10;
 long const fade_block_size = 512;
 int const fade_shift = 8; // fade ends with gain at 1.0 / (1 << fade_shift)
 
-void clear_track_vars( struct Kss_Emu* this )
+static void clear_track_vars( struct Kss_Emu* this )
 {
 	this->current_track   = -1;
 	this->out_time         = 0;
@@ -53,8 +53,8 @@ void Kss_init( struct Kss_Emu* this )
 {
 	this->sample_rate   = 0;
 	this->mute_mask_    = 0;
-	this->tempo       = 1.0;
-	this->gain        = 1.0;
+	this->tempo       = (int)(FP_ONE_TEMPO);
+	this->gain        = (int)FP_ONE_GAIN;
 	this->chip_flags = 0;
 	
 	// defaults
@@ -96,18 +96,18 @@ static blargg_err_t check_kss_header( void const* header )
 
 // Setup
 
-void update_gain( struct Kss_Emu* this )
+static void update_gain( struct Kss_Emu* this )
 {
-	double g = this->gain;
+	int g = this->gain;
 	if ( msx_music_enabled( this ) || msx_audio_enabled( this ) 
 	  || sms_fm_enabled( this ) )
 	{
-		g *= 0.75;
+		g = (g*3) / 4; //g *= 0.75;
 	}
 	else
 	{
 		if ( this->scc_accessed )
-			g *= 1.2;
+			g = (g*6) / 5; //g *= 1.2;
 	}
 	
 	if ( sms_psg_enabled( this ) ) Sms_apu_volume( &this->sms.psg, g );
@@ -241,7 +241,7 @@ blargg_err_t Kss_load_mem( struct Kss_Emu* this, const void* data, long size )
 	return 0;
 }
 
-void set_voice( struct Kss_Emu* this, int i, struct Blip_Buffer* center, struct Blip_Buffer* left, struct Blip_Buffer* right )
+static void set_voice( struct Kss_Emu* this, int i, struct Blip_Buffer* center, struct Blip_Buffer* left, struct Blip_Buffer* right )
 {
 	if ( sms_psg_enabled( this ) ) // Sega Master System
 	{
@@ -279,7 +279,7 @@ void jsr( struct Kss_Emu* this, byte const addr [] )
 	this->cpu.r.pc = get_le16( addr );
 }
 
-void set_bank( struct Kss_Emu* this, int logical, int physical )
+static void set_bank( struct Kss_Emu* this, int logical, int physical )
 {
 	int const bank_size = (16 * 1024L) >> (this->header.bank_mode >> 7 & 1);
 	
@@ -416,7 +416,7 @@ int cpu_in( struct Kss_Emu* this, kss_time_t time, kss_addr_t addr )
 	return 0xFF;
 }
 
-blargg_err_t run_clocks( struct Kss_Emu* this, blip_time_t* duration_ )
+static blargg_err_t run_clocks( struct Kss_Emu* this, blip_time_t* duration_ )
 {
 	blip_time_t duration = *duration_;
 	RETURN_ERR( end_frame( this, duration ) );
@@ -509,18 +509,18 @@ void Sound_mute_voices( struct Kss_Emu* this, int mask )
 	}
 }
 
-void Sound_set_tempo( struct Kss_Emu* this, double t )
+void Sound_set_tempo( struct Kss_Emu* this, int t )
 {
 	require( this->sample_rate ); // sample rate must be set first
-	double const min = 0.02;
-	double const max = 4.00;
+	int const min = (int)(FP_ONE_TEMPO*0.02);
+	int const max = (int)(FP_ONE_TEMPO*4.00);
 	if ( t < min ) t = min;
 	if ( t > max ) t = max;
 	this->tempo = t;
 	
 	blip_time_t period =
 		(this->header.device_flags & 0x40 ? clock_rate / 50 : clock_rate / 60);
-	this->play_period = (blip_time_t) (period / t);
+	this->play_period = (blip_time_t) ((period * FP_ONE_TEMPO) / t);
 }
 
 void fill_buf( struct Kss_Emu* this );
@@ -623,7 +623,7 @@ blargg_err_t Kss_start_track( struct Kss_Emu* this, int track )
 
 // Tell/Seek
 
-blargg_long msec_to_samples( blargg_long msec, long sample_rate )
+static blargg_long msec_to_samples( blargg_long msec, long sample_rate )
 {
 	blargg_long sec = msec / 1000;
 	msec -= sec * 1000;
@@ -646,7 +646,7 @@ blargg_err_t Track_seek( struct Kss_Emu* this, long msec )
 }
 
 blargg_err_t play_( struct Kss_Emu* this, long count, sample_t* out );
-blargg_err_t skip_( struct Kss_Emu* this, long count )
+static blargg_err_t skip_( struct Kss_Emu* this, long count )
 {
 	// for long skip, mute sound
 	const long threshold = 30000;
@@ -720,7 +720,7 @@ static int int_log( blargg_long x, int step, int unit )
 	return ((unit - fraction) + (fraction >> 1)) >> shift;
 }
 
-void handle_fade( struct Kss_Emu *this, long out_count, sample_t* out )
+static void handle_fade( struct Kss_Emu *this, long out_count, sample_t* out )
 {
 	int i;
 	for ( i = 0; i < out_count; i += fade_block_size )
@@ -744,7 +744,7 @@ void handle_fade( struct Kss_Emu *this, long out_count, sample_t* out )
 
 // Silence detection
 
-void emu_play( struct Kss_Emu* this, long count, sample_t* out )
+static void emu_play( struct Kss_Emu* this, long count, sample_t* out )
 {
 	check( current_track_ >= 0 );
 	this->emu_time += count;

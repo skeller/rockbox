@@ -107,7 +107,7 @@ static struct dircache_entry *fd_bindings[MAX_OPEN_FILES];
 static bool dircache_initialized = false;
 static bool dircache_initializing = false;
 static bool thread_enabled = false;
-static unsigned long allocated_size = DIRCACHE_LIMIT;
+static unsigned long allocated_size = 0;
 static unsigned long dircache_size = 0;
 static unsigned long entry_count = 0;
 static unsigned long reserve_used = 0;
@@ -829,7 +829,7 @@ int dircache_build(int last_size)
 #endif
 
     /* Background build, dircache has been previously allocated */
-    if (dircache_size > 0)
+    if (allocated_size > 0)
     {
         d_names_start = d_names_end;
         dircache_size = 0;
@@ -862,22 +862,27 @@ int dircache_build(int last_size)
      * and their corresponding d_name from the end
      * after generation the buffer will be compacted with DIRCACHE_RESERVE
      * free bytes inbetween */
-    audiobuf = ALIGN_UP(audiobuf, sizeof(struct dircache_entry));
-    dircache_root = (struct dircache_entry*)audiobuf;
-    d_names_start = d_names_end = audiobufend - 1;
+    size_t got_size;
+    char* buf = buffer_get_buffer(&got_size);
+    dircache_root = (struct dircache_entry*)ALIGN_UP(buf,
+                                                sizeof(struct dircache_entry));
+    d_names_start = d_names_end = buf + got_size - 1;
     dircache_size = 0;
     generate_dot_d_names();
 
     /* Start a non-transparent rebuild. */
     int res = dircache_do_rebuild();
     if (res < 0)
-        return res;
+        goto fail;
 
     /* now compact the dircache buffer */
     char* dst = ((char*)&dircache_root[entry_count] + DIRCACHE_RESERVE);
     ptrdiff_t offset = d_names_start - dst;
     if (offset <= 0) /* something went wrong */
-        return -1;
+    {
+        res = -1;
+        goto fail;
+    }
 
     /* memmove d_names down, there's a possibility of overlap
      * equivaent to dircache_size - entry_count*sizeof(struct dircache_entry) */
@@ -893,18 +898,22 @@ int dircache_build(int last_size)
     dot -= offset;
     dotdot -= offset;
     
-    /* equivalent to dircache_size + DIRCACHE_RESERVE */
-    allocated_size = (d_names_end - (char*)dircache_root);
+    /* equivalent to dircache_size + DIRCACHE_RESERVE + align */
+    allocated_size = (d_names_end - buf);
     reserve_used = 0;
-    audiobuf += allocated_size;
 
+    buffer_release_buffer(allocated_size);
+    return res;
+fail:
+    dircache_disable();
+    buffer_release_buffer(0);
     return res;
 }
 
 /**
  * Steal the allocated dircache buffer and disable dircache.
  */
-void* dircache_steal_buffer(long *size)
+void* dircache_steal_buffer(size_t *size)
 {
     dircache_disable();
     if (dircache_size == 0)

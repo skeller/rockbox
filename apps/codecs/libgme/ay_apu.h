@@ -46,8 +46,8 @@ void Ay_apu_init( struct Ay_Apu* this );
 static inline void Ay_apu_write_addr( struct Ay_Apu* this, int data ) { this->addr_ = data & 0x0F; }
 	
 // Emulates to time t, then writes to current data register
-void run_until( struct Ay_Apu* this, blip_time_t final_end_time ) ICODE_ATTR;;
-void write_data_( struct Ay_Apu* this, int addr, int data ) ICODE_ATTR;
+void run_until( struct Ay_Apu* this, blip_time_t final_end_time );;
+void write_data_( struct Ay_Apu* this, int addr, int data );
 static inline void Ay_apu_write_data( struct Ay_Apu* this, blip_time_t t, int data )  { run_until( this, t ); write_data_( this, this->addr_, data ); }
 	
 // Reads from current data register
@@ -57,7 +57,7 @@ int Ay_apu_read( struct Ay_Apu* this );
 void Ay_apu_reset( struct Ay_Apu* this );
 		
 // Sets overall volume, where 1.0 is normal
-static inline void Ay_apu_volume( struct Ay_Apu* this, double v ) { Synth_volume( &this->synth_, 0.7/ay_osc_count/ay_amp_range * v ); }
+static inline void Ay_apu_volume( struct Ay_Apu* this, int v ) { Synth_volume( &this->synth_, (v*7)/10 /ay_osc_count/ay_amp_range ); }
 
 static inline void Ay_apu_set_output( struct Ay_Apu* this, int i, struct Blip_Buffer* out )
 {
