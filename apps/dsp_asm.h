@@ -43,7 +43,7 @@
 #define DSP_HAVE_ASM_SAMPLE_OUTPUT_STEREO
 #endif /* CPU_COLDFIRE */
 
-#if (defined(CPU_ARM) || defined(CPU_COLDFIRE)) && !defined(DSP_USE_SINC_RESAMPLING)
+#if (defined (CPU_ARM) || defined(CPU_COLDFIRE)) && !defined(DSP_USE_SINC_RESAMPLING)
 #define DSP_HAVE_ASM_RESAMPLING
 #endif
 
