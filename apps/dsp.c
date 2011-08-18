@@ -757,9 +757,7 @@ static void resampler_new_delta(struct dsp_config *dsp)
            resampling are desired, last_sample history should be maintained
            even when not resampling. */
         dsp->resample = NULL;
-        dsp->data.resample_data.current = 0;
-        memset(dsp->data.resample_data.resample_buf[0], sizeof(dsp->data.resample_data.resample_buf[0]), 0);
-        memset(dsp->data.resample_data.resample_buf[1], sizeof(dsp->data.resample_data.resample_buf[1]), 0);
+        memset(dsp->data.resample_data.resample_buf, 0, sizeof(dsp->data.resample_data.resample_buf));
         dsp->data.resample_data.buf_fill = 0; /* fixme: initialize to FILTER_DELAY on startup */
         dsp->data.resample_data.current = FILTER_SIZE<<16; /* fixme: initialize on startup */
     }
@@ -1569,8 +1567,13 @@ int dsp_output_count(struct dsp_config *dsp, int count)
 #endif
     if (dsp->resample)
     {
+#ifdef DSP_USE_SINC_RESAMPLING
+        count = (int)(((unsigned long)(count + FILTER_SIZE - 1) * NATIVE_FREQUENCY
+                    + (dsp->frequency - 1)) / dsp->frequency);
+#else
         count = (int)(((unsigned long)count * NATIVE_FREQUENCY
                     + (dsp->frequency - 1)) / dsp->frequency);
+#endif
     }
 
     /* Now we have the resampled sample count which must not exceed
@@ -1597,8 +1600,10 @@ int dsp_input_count(struct dsp_config *dsp, int count)
          * dsp->frequency * 65536 / NATIVE_FREQUENCY, and
          * round towards zero to avoid buffer overflows. */
 #ifdef DSP_USE_SINC_RESAMPLING
-	count = (int)(((unsigned long)count *
+        count = (int)(((unsigned long)count *
                       dsp->data.resample_data.increment) >> 16);
+        count = count - dsp->data.resample_data.buf_fill;
+        if(count < 0) count = 0;
 #else
         count = (int)(((unsigned long)count *
                       dsp->data.resample_data.delta) >> 16);
